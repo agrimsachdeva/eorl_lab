@@ -20,7 +20,11 @@ ROLE_POLICIES = {
 	"warehouse_agent": {
 		"policy_name": "Test Warehouse Policy M4",
 		"may_submit_documents": 1,
-		"tools": ["get_purchase_order", "create_purchase_receipt", "submit_purchase_receipt"],
+		"may_message_agents": 1,
+		"tools": [
+			"get_purchase_order", "create_purchase_receipt", "submit_purchase_receipt",
+			"inspect_received_goods", "escalate_quality_exception", "message_agent",
+		],
 	},
 	"accounts_payable_agent": {
 		"policy_name": "Test Accounts Payable Policy M4",
@@ -74,6 +78,7 @@ class TestEORLMemoryAndRepeatedEpisodes(FrappeTestCase):
 					"policy_name": spec["policy_name"],
 					"may_submit_documents": spec.get("may_submit_documents", 0),
 					"may_approve": spec.get("may_approve", 0),
+					"may_message_agents": spec.get("may_message_agents", 0),
 					"allowed_semantic_tools": [{"tool_name": t} for t in spec["tools"]],
 				}
 			).insert(ignore_if_duplicate=True)

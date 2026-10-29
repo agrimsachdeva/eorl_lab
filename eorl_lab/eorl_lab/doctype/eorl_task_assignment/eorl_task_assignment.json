@@ -1,0 +1,26 @@
+{
+ "doctype": "DocType",
+ "name": "EORL Task Assignment",
+ "module": "EORL Lab",
+ "custom": 0,
+ "istable": 0,
+ "autoname": "hash",
+ "track_changes": 0,
+ "field_order": ["run", "episode", "slot_id", "assigned_to", "assignment_policy", "candidate_count", "rationale", "assigned_at"],
+ "fields": [
+  {"fieldname": "run", "fieldtype": "Link", "label": "Run", "options": "EORL Run", "reqd": 1, "in_list_view": 1, "search_index": 1},
+  {"fieldname": "episode", "fieldtype": "Link", "label": "Episode", "options": "EORL Episode", "in_list_view": 1, "search_index": 1},
+  {"fieldname": "slot_id", "fieldtype": "Data", "label": "Slot ID", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "assigned_to", "fieldtype": "Link", "label": "Assigned To", "options": "EORL Agent Template", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "assignment_policy", "fieldtype": "Select", "label": "Assignment Policy", "options": "fixed\nround_robin", "default": "fixed", "in_list_view": 1},
+  {"fieldname": "candidate_count", "fieldtype": "Int", "label": "Candidate Count", "default": "1", "description": "Number of agents eligible for this slot. 1 for every architecture built so far (SOTA Milestone 1 does not yet support multi-candidate pools) -- recorded anyway so the assignment decision is a real, queryable record."},
+  {"fieldname": "rationale", "fieldtype": "Small Text", "label": "Rationale"},
+  {"fieldname": "assigned_at", "fieldtype": "Datetime", "label": "Assigned At"}
+ ],
+ "permissions": [
+  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
+  {"role": "EORL Administrator", "read": 1, "write": 1, "create": 1, "delete": 1},
+  {"role": "EORL Researcher", "read": 1, "write": 1, "create": 1, "delete": 0},
+  {"role": "EORL Viewer", "read": 1}
+ ]
+}

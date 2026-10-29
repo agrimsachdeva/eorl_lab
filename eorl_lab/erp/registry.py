@@ -1,13 +1,14 @@
-from eorl_lab.erp import buying
+from eorl_lab.erp import buying, stock
+from eorl_lab.organization import communication
 
-# Milestone 3 extends the registry to cover the full procure-to-pay chain
-# (spec section 10): sensing + consequential actions for PO approval,
-# receipt, invoice, and payment. Communication tools (message_agent,
-# request_approval, escalate_exception) remain structural/orchestrated for
-# the specialist/handoff architecture in this milestone -- see
-# eorl_lab.runtime.orchestrator._handoff -- rather than agent-chosen tool
-# calls; that becomes relevant once a broader-autonomy architecture is
-# introduced (spec section 2.3 Architecture B, a later milestone).
+# Milestone 3 extended the registry to cover the full procure-to-pay
+# chain. SOTA Milestone 1 adds the ground-truth-driven inspection/
+# exception tools (V2 section 15) and the first agent-chosen
+# communication tool (V2 section 9) -- message_agent, checked against a
+# real EORL Communication Policy graph, used alongside (not instead of)
+# the orchestrator-enforced structural handoffs (eorl_lab.runtime
+# .orchestrator._handoff) that still drive the normal specialist/handoff
+# stage sequence.
 TOOL_REGISTRY = {
 	"get_supplier_options": buying.get_supplier_options,
 	"get_purchase_order": buying.get_purchase_order,
@@ -20,6 +21,9 @@ TOOL_REGISTRY = {
 	"submit_purchase_invoice": buying.submit_purchase_invoice,
 	"create_payment_entry": buying.create_payment_entry,
 	"submit_payment_entry": buying.submit_payment_entry,
+	"inspect_received_goods": stock.inspect_received_goods,
+	"escalate_quality_exception": stock.escalate_quality_exception,
+	"message_agent": communication.message_agent,
 }
 
 

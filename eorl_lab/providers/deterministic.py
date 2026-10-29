@@ -42,16 +42,71 @@ def _choose_supplier(case, scratch, memory):
 	return supplier, basis, assessment
 
 
+def _decide_receipt_quality_steps(scratch):
+	"""SOTA Milestone 1 (V2 sections 13/15): shared by the specialist
+	Warehouse Agent and the broad-autonomy General Purchasing Agent --
+	inspect goods on receipt (ground-truth-driven, not scripted), and if
+	the inspection fails, escalate the exception onto the ERP record AND
+	notify Accounts Payable via agent-chosen communication, before
+	finally submitting the receipt either way. Returns a decision dict
+	for the next required step in this sub-sequence, or None once it's
+	complete (caller should move on to submit_purchase_receipt).
+
+	This is the first place in the system where two episodes can
+	legitimately produce two DIFFERENT tool-call sequences -- not just
+	different argument values -- because the inspection's outcome is
+	drawn from the scenario's own latent ground truth (see
+	eorl_lab.erp.stock.inspect_received_goods), not fixed by this
+	policy."""
+	purchase_receipt = scratch["purchase_receipt"]
+
+	if "quality_passed" not in scratch:
+		return _decision(
+			"inspect_received_goods",
+			{"purchase_receipt": purchase_receipt},
+			stop=False,
+			basis="Deterministic policy: inspect goods on receipt before closing it out "
+			"(V2 section 15: the realized outcome is drawn from ground truth, not scripted).",
+			assessment="Receipt recorded; inspecting quality before finalizing.",
+		)
+
+	if not scratch["quality_passed"] and "quality_exception_escalated" not in scratch:
+		return _decision(
+			"escalate_quality_exception",
+			{"purchase_receipt": purchase_receipt, "units_rejected": scratch.get("units_rejected")},
+			stop=False,
+			basis="Deterministic policy: a failed inspection is an exception that must be "
+			"escalated onto the ERP record before closing the receipt (EXCEPTION process stage).",
+			assessment=f"Inspection failed: {scratch.get('units_rejected')} unit(s) rejected. Escalating.",
+		)
+
+	if not scratch["quality_passed"] and "delivered" not in scratch:
+		return _decision(
+			"message_agent",
+			{
+				"recipient_slot": "Accounts Payable Agent",
+				"content": f"Quality exception on {purchase_receipt}: {scratch.get('units_rejected')} unit(s) rejected.",
+			},
+			stop=False,
+			basis="Deterministic policy: notify Accounts Payable directly before they invoice "
+			"against this receipt (agent-chosen communication, V2 section 9) -- in addition to, "
+			"not instead of, the ERP-record escalation.",
+			assessment="Escalated on the ERP record; now notifying Accounts Payable directly.",
+		)
+
+	return None
+
+
 class DeterministicProvider(ModelProvider):
 	"""Rule-based provider for tests and reproducible demos (spec section
 	8.1). Milestone 2 scripted one role; Milestone 3 scripted one fixed
 	policy per role in the specialist/handoff architecture (spec section
 	2.3 Architecture A); Milestone 4 added memory-conditioned routinization
-	for the Purchasing Agent. Milestone 5 adds the broad-autonomy policy
-	(Architecture B): one actor performs every stage of the same routine
-	with no handoffs, using the identical supplier-choice rule, so the two
-	architectures are genuinely comparable rather than differing in what
-	the "right" decision even is."""
+	for the Purchasing Agent; Milestone 5 added the broad-autonomy policy.
+	SOTA Milestone 1 adds the first ground-truth-driven branch (quality
+	inspection on receipt) shared by both architectures, so the same
+	policy can legitimately take two different paths depending on the
+	scenario's own latent ground truth, not on a scripted toggle."""
 
 	def generate(self, request: ModelRequest) -> ModelResponse:
 		role = request.context.get("organizational_role")
@@ -138,12 +193,16 @@ class DeterministicProvider(ModelProvider):
 				assessment="PO confirmed approved; recording receipt.",
 			)
 
+		quality_step = _decide_receipt_quality_steps(scratch)
+		if quality_step:
+			return quality_step
+
 		return _decision(
 			"submit_purchase_receipt",
 			{"name": scratch["purchase_receipt"]},
 			stop=True,
 			basis="Deterministic policy: finalize the recorded receipt.",
-			assessment="Receipt recorded; submitting.",
+			assessment="Receipt recorded" + ("" if scratch.get("quality_passed") else " with exception handled") + "; submitting.",
 		)
 
 	def _decide_accounts_payable_agent(self, context):
@@ -256,13 +315,17 @@ class DeterministicProvider(ModelProvider):
 				assessment="PO approved; recording receipt myself.",
 			)
 
+		quality_step = _decide_receipt_quality_steps(scratch)
+		if quality_step:
+			return quality_step
+
 		if not scratch.get("purchase_receipt_submitted"):
 			return _decision(
 				"submit_purchase_receipt",
 				{"name": scratch["purchase_receipt"]},
 				stop=False,
 				basis="Deterministic policy: finalize the recorded receipt.",
-				assessment="Submitting own receipt.",
+				assessment="Submitting own receipt" + ("" if scratch.get("quality_passed") else " with exception handled") + ".",
 			)
 
 		if "purchase_receipt_status" not in scratch:

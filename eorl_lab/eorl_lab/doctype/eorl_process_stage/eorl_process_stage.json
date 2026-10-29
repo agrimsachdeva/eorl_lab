@@ -1,0 +1,15 @@
+{
+ "doctype": "DocType",
+ "name": "EORL Process Stage",
+ "module": "EORL Lab",
+ "custom": 0,
+ "istable": 1,
+ "editable_grid": 1,
+ "field_order": ["stage_id", "label", "is_terminal"],
+ "fields": [
+  {"fieldname": "stage_id", "fieldtype": "Data", "label": "Stage ID", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "label", "fieldtype": "Data", "label": "Label", "in_list_view": 1},
+  {"fieldname": "is_terminal", "fieldtype": "Check", "label": "Is Terminal", "in_list_view": 1}
+ ],
+ "permissions": []
+}

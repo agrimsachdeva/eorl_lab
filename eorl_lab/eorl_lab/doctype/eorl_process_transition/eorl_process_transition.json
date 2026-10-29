@@ -1,0 +1,16 @@
+{
+ "doctype": "DocType",
+ "name": "EORL Process Transition",
+ "module": "EORL Lab",
+ "custom": 0,
+ "istable": 1,
+ "editable_grid": 1,
+ "field_order": ["from_stage", "to_stage", "transition_type", "tool_names"],
+ "fields": [
+  {"fieldname": "from_stage", "fieldtype": "Data", "label": "From Stage", "in_list_view": 1, "description": "Blank for an entry transition (the first stage of an episode)."},
+  {"fieldname": "to_stage", "fieldtype": "Data", "label": "To Stage", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "transition_type", "fieldtype": "Select", "label": "Transition Type", "options": "mandatory\noptional\nprohibited", "default": "mandatory", "in_list_view": 1},
+  {"fieldname": "tool_names", "fieldtype": "Small Text", "label": "Tool Names", "description": "Comma-separated semantic tool names that realize this transition (calling one of them moves the process to to_stage)."}
+ ],
+ "permissions": []
+}

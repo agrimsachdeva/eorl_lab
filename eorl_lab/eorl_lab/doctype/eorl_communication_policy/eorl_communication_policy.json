@@ -1,0 +1,21 @@
+{
+ "doctype": "DocType",
+ "name": "EORL Communication Policy",
+ "module": "EORL Lab",
+ "custom": 0,
+ "istable": 0,
+ "autoname": "field:policy_name",
+ "track_changes": 1,
+ "field_order": ["policy_name", "description", "edges"],
+ "fields": [
+  {"fieldname": "policy_name", "fieldtype": "Data", "label": "Policy Name", "reqd": 1, "unique": 1},
+  {"fieldname": "description", "fieldtype": "Small Text", "label": "Description"},
+  {"fieldname": "edges", "fieldtype": "Table", "label": "Edges", "options": "EORL Communication Edge"}
+ ],
+ "permissions": [
+  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
+  {"role": "EORL Administrator", "read": 1, "write": 1, "create": 1, "delete": 1},
+  {"role": "EORL Researcher", "read": 1, "write": 1, "create": 1, "delete": 0},
+  {"role": "EORL Viewer", "read": 1}
+ ]
+}

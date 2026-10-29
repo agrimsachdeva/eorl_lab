@@ -15,7 +15,11 @@ SPECIALIST_ROLE_POLICIES = {
 	},
 	"warehouse_agent": {
 		"may_submit_documents": 1,
-		"tools": ["get_purchase_order", "create_purchase_receipt", "submit_purchase_receipt"],
+		"may_message_agents": 1,
+		"tools": [
+			"get_purchase_order", "create_purchase_receipt", "submit_purchase_receipt",
+			"inspect_received_goods", "escalate_quality_exception", "message_agent",
+		],
 	},
 	"accounts_payable_agent": {
 		"may_submit_documents": 1,
@@ -36,6 +40,7 @@ BROAD_AUTONOMY_TOOLS = [
 	"create_purchase_order", "submit_purchase_order", "create_purchase_receipt",
 	"submit_purchase_receipt", "create_purchase_invoice", "submit_purchase_invoice",
 	"create_payment_entry", "submit_payment_entry",
+	"inspect_received_goods", "escalate_quality_exception", "message_agent",
 ]
 
 
@@ -57,6 +62,7 @@ class TestProcessMetricsIntegration(FrappeTestCase):
 					"doctype": "EORL Tool Policy",
 					"policy_name": f"Test {key} Policy M7",
 					"may_submit_documents": spec.get("may_submit_documents", 0),
+					"may_message_agents": spec.get("may_message_agents", 0),
 					"allowed_semantic_tools": [{"tool_name": t} for t in spec["tools"]],
 				}
 			).insert(ignore_if_duplicate=True)
@@ -85,6 +91,7 @@ class TestProcessMetricsIntegration(FrappeTestCase):
 				"doctype": "EORL Tool Policy",
 				"policy_name": "Test Broad Autonomy Policy M7",
 				"may_submit_documents": 1,
+				"may_message_agents": 1,
 				"allowed_semantic_tools": [{"tool_name": t} for t in BROAD_AUTONOMY_TOOLS],
 			}
 		).insert(ignore_if_duplicate=True)
@@ -118,10 +125,18 @@ class TestProcessMetricsIntegration(FrappeTestCase):
 	def test_specialist_and_broad_autonomy_metrics_discriminate_on_coherence_not_variety(self):
 		"""The empirically-grounded claim this milestone makes: today's
 		deterministic policies discriminate architectures on COHERENCE
-		(actor identity / handoff structure) but NOT on routine VARIETY
-		(every episode within a run follows the identical tool-call
-		sequence -- see PROGRESS.md's documented finding). Both facts
-		are asserted here, not just the flattering one."""
+		(actor identity / handoff structure), independent of routine
+		VARIETY. (At the time this test was first written, pre-SOTA-
+		Milestone-1, variety was *also* vacuous on every run -- every
+		episode followed an identical tool-call sequence, since nothing
+		in the policy branched on anything. SOTA Milestone 1's
+		ground-truth-driven quality inspection changed that: episodes
+		can now legitimately take different paths depending on the
+		scenario's own latent ground truth. See
+		test_eorl_ground_truth_and_authority.py for a controlled proof
+		of that new variety; this test no longer asserts variety is
+		absent, since asserting that would now be flaky by design, not
+		meaningfully false.)"""
 		specialist_result = run_architecture(self.specialist_architecture.name, seed=1, episode_count=3)
 		broad_result = run_architecture(self.broad_autonomy_architecture.name, seed=1, episode_count=3)
 		self.assertTrue(specialist_result["outcome"]["success"])
@@ -129,13 +144,6 @@ class TestProcessMetricsIntegration(FrappeTestCase):
 
 		specialist_metrics = compute_run_metrics(specialist_result["run"])["metrics"]
 		broad_metrics = compute_run_metrics(broad_result["run"])["metrics"]
-
-		# Variety: vacuous on both, honestly, because the policy never
-		# branches on anything -- same path every episode.
-		self.assertEqual(specialist_metrics["unique_sequence_count"], 1)
-		self.assertEqual(broad_metrics["unique_sequence_count"], 1)
-		self.assertEqual(specialist_metrics["sequence_entropy"], 0.0)
-		self.assertEqual(broad_metrics["sequence_entropy"], 0.0)
 
 		# Coherence: genuinely different, driven by organizational
 		# structure, not by the policy varying what it does.

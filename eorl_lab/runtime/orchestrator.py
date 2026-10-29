@@ -1,3 +1,4 @@
+import inspect
 from typing import List, Optional
 
 import frappe
@@ -13,12 +14,12 @@ from eorl_lab.runtime import authority
 from eorl_lab.scenarios.procurement import generate_case
 
 # Explicit step limit per actor turn (spec section 13: "no run should
-# hang indefinitely"). The broad-autonomy actor's single continuous turn
-# (sense, create PO, sense PO, submit PO, create receipt, submit receipt,
-# sense receipt, create invoice, submit invoice, create payment, submit
-# payment = 11 steps) needs more headroom than any one specialist stage;
-# the ceiling is a safety bound, not the expected length.
-MAX_STEPS_PER_ACTOR_TURN = 15
+# hang indefinitely"). The broad-autonomy actor's single continuous turn,
+# worst case (quality exception: inspect + escalate + message, on top of
+# the full happy-path chain), now runs 14 steps -- bumped from 15 to 18
+# for real margin, not just clearing the bar. It is a safety bound, not
+# the expected length.
+MAX_STEPS_PER_ACTOR_TURN = 18
 
 _RESULT_ID_KEYS = ("purchase_order", "purchase_receipt", "purchase_invoice", "payment_entry")
 
@@ -35,6 +36,28 @@ def _primary_result_id(result: dict):
 	return None
 
 
+def _call_tool_with_context(tool_fn, tool_args: dict, *, case: dict, sender_slot: str, communication_policy: Optional[str]):
+	"""SOTA Milestone 1: injects environment/organization context into
+	only the tools that declare it by parameter name -- `_case` (ground
+	truth, V2 section 15), `_sender_slot` and `_communication_policy`
+	(V2 section 9). None of the 11 tools built through Milestone 5
+	declare any of these, so this is a no-op for them; only
+	eorl_lab.erp.stock.inspect_received_goods and
+	eorl_lab.organization.communication.message_agent opt in. An agent's
+	own decision arguments can never supply these names (they're not in
+	`tool_args` to begin with), so an agent cannot forge its own
+	identity or policy."""
+	sig = inspect.signature(tool_fn)
+	extra = {}
+	if "_case" in sig.parameters:
+		extra["_case"] = case
+	if "_sender_slot" in sig.parameters:
+		extra["_sender_slot"] = sender_slot
+	if "_communication_policy" in sig.parameters:
+		extra["_communication_policy"] = communication_policy
+	return tool_fn(**tool_args, **extra)
+
+
 def _run_actor_turn(
 	ctx: ExperimentContext,
 	agent,
@@ -42,6 +65,7 @@ def _run_actor_turn(
 	case: dict,
 	handoff: dict,
 	memory: Optional[List[dict]] = None,
+	communication_policy: Optional[str] = None,
 ) -> tuple[dict, bool, str]:
 	"""Runs one persistent actor's turn: repeated decide -> authority
 	check -> execute -> observe loop until the actor signals stop or the
@@ -54,7 +78,10 @@ def _run_actor_turn(
 	past memory records (empty/None if memory is disabled or this is the
 	first episode) -- retrieval and writing happen in the caller, which
 	knows the run/episode/memory-profile context this function doesn't
-	need."""
+	need. `communication_policy` (SOTA Milestone 1) is the EORL
+	Communication Policy name this run's architecture is bound to, if
+	any -- passed through to tools that need it (message_agent), never
+	read directly here."""
 
 	tool_policy = frappe.get_doc("EORL Tool Policy", agent.tool_policy)
 	available_tools = [row.tool_name for row in tool_policy.allowed_semantic_tools]
@@ -122,8 +149,19 @@ def _run_actor_turn(
 			target_type="tool", target_id=tool_name, success=True, payload=authority_decision.as_dict(),
 		)
 
+		if authority_decision.soft_violations:
+			# V2 section 13: a soft rule never blocks execution -- it's
+			# logged as its own observable event alongside the normal
+			# authorization, not instead of it.
+			emit_event(
+				ctx, "soft_rule_violation", actor_slot=agent.organizational_role, actor_instance_id=agent.name,
+				target_type="tool", target_id=tool_name, success=True,
+				payload={"violations": authority_decision.soft_violations, "tool_args": tool_args},
+			)
+
 		tool_fn = get_tool(tool_name)
 		is_write = tool_name in authority.WRITE_TOOLS
+		is_communication = tool_name in authority.COMMUNICATION_TOOLS
 
 		if is_write:
 			emit_event(
@@ -132,7 +170,10 @@ def _run_actor_turn(
 			)
 
 		try:
-			result = tool_fn(**tool_args)
+			result = _call_tool_with_context(
+				tool_fn, tool_args,
+				case=case, sender_slot=agent.organizational_role, communication_policy=communication_policy,
+			)
 		except Exception as exc:
 			# A failed tool call does not corrupt the trace already
 			# recorded for this episode -- it becomes an observable
@@ -162,6 +203,20 @@ def _run_actor_turn(
 				target_id=_primary_result_id(result), payload=result,
 			)
 
+		if is_communication and result.get("delivered"):
+			# Agent-chosen messaging (V2 section 9) uses the same two
+			# event types the orchestrator-enforced structural handoffs
+			# use -- both are real inter-agent messages, just decided
+			# by a different party.
+			emit_event(
+				ctx, "agent_message_sent", actor_slot=agent.organizational_role,
+				target_type="agent", target_id=result.get("recipient"), payload={"content": result.get("content")},
+			)
+			emit_event(
+				ctx, "agent_message_received", actor_slot=result.get("recipient"),
+				target_type="agent", target_id=agent.organizational_role, payload={"content": result.get("content")},
+			)
+
 		if decision.get("stop"):
 			return scratch, success, failure_reason
 	else:
@@ -178,6 +233,33 @@ def _handoff(ctx: ExperimentContext, from_role: str, to_role: str, content: dict
 	at all by construction: one actor, zero messages."""
 	emit_event(ctx, "agent_message_sent", actor_slot=from_role, target_type="agent", target_id=to_role, payload=content)
 	emit_event(ctx, "agent_message_received", actor_slot=to_role, target_type="agent", target_id=from_role, payload=content)
+
+
+def _record_task_assignment(ctx: ExperimentContext, slot_id: str, agent_template_name: str):
+	"""V2 section 11: task assignment is a real, logged decision, not an
+	implicit default. SOTA Milestone 1 scope: every architecture built
+	so far has exactly one candidate per slot, so this always records
+	policy "fixed" with candidate_count=1 -- the data model and event are
+	real even though multi-candidate pooling (choosing among several
+	agents for one slot) isn't built yet (see SOTA_ROADMAP.md)."""
+	doc = frappe.get_doc(
+		{
+			"doctype": "EORL Task Assignment",
+			"run": ctx.run_id,
+			"episode": ctx.episode_id,
+			"slot_id": slot_id,
+			"assigned_to": agent_template_name,
+			"assignment_policy": "fixed",
+			"candidate_count": 1,
+			"rationale": "only one candidate configured for this slot",
+			"assigned_at": now_datetime(),
+		}
+	).insert(ignore_permissions=True)
+	emit_event(
+		ctx, "task_assigned", target_type="EORL Task Assignment", target_id=doc.name,
+		payload={"slot_id": slot_id, "assigned_to": agent_template_name, "policy": "fixed"},
+	)
+	return doc.name
 
 
 def _summarize_actor_action(role: str, scratch: dict) -> str:
@@ -323,7 +405,9 @@ _SPECIALIST_SEQUENCE = [
 ]
 
 
-def _run_specialist_episode(ctx: ExperimentContext, slot_map: dict, case: dict, provider) -> dict:
+def _run_specialist_episode(
+	ctx: ExperimentContext, slot_map: dict, case: dict, provider, communication_policy: Optional[str] = None
+) -> dict:
 	"""Architecture A (specialist/handoff, spec section 2.3): four
 	persistent actor slots, each restricted to its own tools, hand off
 	one full procure-to-pay routine with explicit, logged communication
@@ -337,6 +421,7 @@ def _run_specialist_episode(ctx: ExperimentContext, slot_map: dict, case: dict, 
 
 	for role_name, slot_key, handoff_fn in _SPECIALIST_SEQUENCE:
 		agent_template_name = slot_map[slot_key]
+		_record_task_assignment(ctx, slot_key, agent_template_name)
 		agent = frappe.get_doc("EORL Agent Template", agent_template_name)
 
 		try:
@@ -351,7 +436,7 @@ def _run_specialist_episode(ctx: ExperimentContext, slot_map: dict, case: dict, 
 
 		retrieved_memory = _retrieve_memory(ctx, agent, ctx.run_id)
 		stage_scratch, stage_success, stage_failure_reason = _run_actor_turn(
-			ctx, agent, provider, case, handoff, memory=retrieved_memory
+			ctx, agent, provider, case, handoff, memory=retrieved_memory, communication_policy=communication_policy
 		)
 		_write_memory(ctx, agent, ctx.run_id, ctx.episode_id, case, stage_scratch, stage_success)
 
@@ -370,10 +455,13 @@ def _run_specialist_episode(ctx: ExperimentContext, slot_map: dict, case: dict, 
 	outcome["purchase_receipt"] = routine_state.get("purchase_receipt")
 	outcome["purchase_invoice"] = routine_state.get("purchase_invoice")
 	outcome["payment_entry"] = routine_state.get("payment_entry")
+	outcome["quality_passed"] = routine_state.get("quality_passed")
 	return outcome
 
 
-def _run_broad_autonomy_episode(ctx: ExperimentContext, slot_map: dict, case: dict, provider) -> dict:
+def _run_broad_autonomy_episode(
+	ctx: ExperimentContext, slot_map: dict, case: dict, provider, communication_policy: Optional[str] = None
+) -> dict:
 	"""Architecture B (broad autonomy, spec section 2.3): one actor
 	performs every stage of the same routine itself, with zero handoffs
 	-- "fewer mandatory handoffs; greater actor continuity" by
@@ -382,10 +470,13 @@ def _run_broad_autonomy_episode(ctx: ExperimentContext, slot_map: dict, case: di
 	architectures are comparable rather than differing in what the
 	"right" decision even is."""
 	agent_template_name = slot_map["general_purchasing_agent"]
+	_record_task_assignment(ctx, "general_purchasing_agent", agent_template_name)
 	agent = frappe.get_doc("EORL Agent Template", agent_template_name)
 
 	retrieved_memory = _retrieve_memory(ctx, agent, ctx.run_id)
-	scratch, success, failure_reason = _run_actor_turn(ctx, agent, provider, case, handoff={}, memory=retrieved_memory)
+	scratch, success, failure_reason = _run_actor_turn(
+		ctx, agent, provider, case, handoff={}, memory=retrieved_memory, communication_policy=communication_policy
+	)
 	_write_memory(ctx, agent, ctx.run_id, ctx.episode_id, case, scratch, success)
 
 	outcome = {
@@ -395,6 +486,7 @@ def _run_broad_autonomy_episode(ctx: ExperimentContext, slot_map: dict, case: di
 		"purchase_receipt": scratch.get("purchase_receipt"),
 		"purchase_invoice": scratch.get("purchase_invoice"),
 		"payment_entry": scratch.get("payment_entry"),
+		"quality_passed": scratch.get("quality_passed"),
 	}
 	if not success:
 		outcome["failure_reason"] = failure_reason
@@ -407,7 +499,12 @@ def run_specialist_routine(agent_templates: dict, seed: int = 42, episode_count:
 	the config-driven entrypoint Milestone 5 adds; this function now
 	delegates its per-episode logic to the same `_run_specialist_episode`
 	helper `run_architecture` uses, so there is one specialist-handoff
-	implementation, not two."""
+	implementation, not two. No EORL Communication Policy is bound here
+	(there's no EORL Architecture document in this code path) -- a
+	message_agent call made by a run launched this way will report
+	NO_POLICY_BOUND rather than deliver, which is the same honest
+	pre-Milestone-5 scoping eorl_lab.observability.replay.reproduce_run
+	already documents."""
 
 	run = frappe.get_doc(
 		{
@@ -468,6 +565,7 @@ def _run_episode_loop(
 	episode_count: int,
 	coordination_mode: str,
 	regime_shift: Optional[dict],
+	communication_policy: Optional[str] = None,
 ) -> list:
 	"""Shared multi-episode driver for both coordination modes. A failed
 	episode halts the run (spec section 13: a failure state, not a
@@ -499,9 +597,9 @@ def _run_episode_loop(
 		emit_event(ctx, "environment_observed", payload={"case": case})
 
 		if coordination_mode == "specialist_handoff":
-			outcome = _run_specialist_episode(ctx, slot_map, case, provider)
+			outcome = _run_specialist_episode(ctx, slot_map, case, provider, communication_policy=communication_policy)
 		elif coordination_mode == "broad_autonomy":
-			outcome = _run_broad_autonomy_episode(ctx, slot_map, case, provider)
+			outcome = _run_broad_autonomy_episode(ctx, slot_map, case, provider, communication_policy=communication_policy)
 		else:
 			raise ValueError(f"Unknown coordination_mode: {coordination_mode!r}")
 
@@ -559,7 +657,12 @@ def run_architecture(
 	different architectures produces the byte-identical scenario stream
 	per episode (spec section 18's paired seeds), since `generate_case`
 	is a pure function of (seed, episode, regime_shift) independent of
-	which architecture calls it."""
+	which architecture calls it.
+
+	SOTA Milestone 1: also reads the architecture's bound
+	`communication_policy` (if any) and threads it through so
+	agent-chosen message_agent calls are checked against a real policy,
+	not just the orchestrator's own structural handoffs."""
 
 	architecture = frappe.get_doc("EORL Architecture", architecture_name)
 	slot_map = {row.slot_id: row.agent_template for row in architecture.actor_slots}
@@ -593,11 +696,13 @@ def run_architecture(
 			"run": run.name, "seed": seed, "architecture": architecture.name,
 			"coordination_mode": architecture.coordination_mode, "slot_map": slot_map,
 			"episode_count": episode_count, "regime_shift": regime_shift,
+			"communication_policy": architecture.communication_policy,
 		},
 	)
 
 	episode_outcomes = _run_episode_loop(
-		ctx, run, slot_map, seed, episode_count, architecture.coordination_mode, regime_shift_payload
+		ctx, run, slot_map, seed, episode_count, architecture.coordination_mode, regime_shift_payload,
+		communication_policy=architecture.communication_policy,
 	)
 
 	last_outcome = episode_outcomes[-1] if episode_outcomes else {"success": False}

@@ -1,6 +1,7 @@
 # EORL SOTA Roadmap
 
-**Status:** planning document, not yet executed. Created 2026-10-29.
+**Status:** SOTA Milestone 1 delivered. Created 2026-10-29, updated 2026-10-29
+(SOTA M1).
 
 This tracks progress against `docs/specs/EORL_SOTA_DEVELOPER_BUILD_SPEC_V2_ANALYTICS.md`
 ("V2"), a substantially larger specification than the one `PROGRESS.md`
@@ -175,14 +176,85 @@ simulation, Theory Compiler wizard).
 
 ---
 
-## 5. Open question before starting
+## 5. SOTA Milestone 1 — Delivered
 
-This roadmap is long by necessity — V2 is a much bigger system than V1.
-**Confirm the starting point** before implementation begins: SOTA
-Milestone 1 (structural gaps) is the recommended entry point because
-everything downstream — real counterfactual branching, meaningful
-repertoire metrics, any statistical inference on real effects — depends
-on ground truth actually mattering and authority being real, not
-cosmetic. Jumping straight to the analytics workbench (§37+) would mean
-building a sophisticated statistics/visualization layer on top of data
-that still has no real experimental variation to analyze.
+User confirmed this as the starting point (structural gaps before the
+analytics workbench). Delivered:
+
+- **Ground truth finally drives outcomes.** `eorl_lab.erp.stock
+  .inspect_received_goods` draws a quality-inspection result from the
+  scenario's own `latent_ground_truth[supplier].quality_probability`,
+  seeded deterministically by `(case_hash, purchase_receipt)` so it's
+  reproducible but genuinely scenario-driven, not scripted. Injected
+  into tools via a new `_call_tool_with_context` helper
+  (`eorl_lab.runtime.orchestrator`) that passes `_case` (and
+  `_sender_slot`/`_communication_policy`) only to tools that declare
+  those exact parameter names — an agent's own decision arguments can
+  never forge them.
+- **Formal authority model (V2 §12).** `EORL Tool Policy` gained
+  `has_execution_authority`, `has_decision_authority`,
+  `has_assignment_authority` as explicit grants alongside the existing
+  `may_approve`/`may_submit_documents`. **Hard vs. soft constraints**
+  (V2 §13) are now genuinely distinct: `authority.evaluate()` returns
+  `soft_violations` on an otherwise-*allowed* decision — a large
+  purchase order over `soft_rule_large_qty_threshold` is logged
+  (`soft_rule_violation` event) but never blocked, proven alongside a
+  test that a tool outside the policy's allow-list still hard-blocks
+  regardless of any soft-rule configuration — the two checks are
+  independent.
+- **`EORL Process Grammar`** (+ `EORL Process Stage`/`EORL Process
+  Transition` children): a real, queryable tool→stage map via
+  `to_stage_map()`, which `eorl_lab.analysis.paths.process_path()` now
+  accepts as an optional override — the analysis functions stay pure
+  (plain dicts, no Frappe access); only the DocType resolver touches
+  Frappe. A seed grammar reproduces the hardcoded default exactly
+  (tested).
+- **`EORL Communication Policy`** (+ `EORL Communication Edge`) and the
+  first agent-*chosen* communication tool, `eorl_lab.organization
+  .communication.message_agent`: checked against a real edge graph,
+  used *alongside* (not instead of) the orchestrator-enforced
+  structural handoffs. `EORL Architecture` gained a `communication_policy`
+  Link field.
+- **`EORL Task Assignment`**: every role, every episode, gets a real
+  logged assignment record (`policy="fixed"`, since every architecture
+  built so far has exactly one candidate per slot — multi-candidate
+  pooling is future work) and a `task_assigned` event.
+- **The empirically-grounded "variety is vacuous" finding from
+  Milestone 7 is retired, with evidence, not just asserted away.** Ran
+  30 real episodes (`RUN-00012`, seed 777): 2 genuine quality exceptions
+  (episodes 19 and 29), handled end-to-end for real — `inspect_received_goods`
+  → `escalate_quality_exception` (a real comment on ERPNext document
+  `MAT-PRE-2026-00466`) → `message_agent` (delivered to Accounts
+  Payable Agent) → `submit_purchase_receipt` regardless. Recomputing
+  metrics on that run: **`unique_sequence_count: 2`, `sequence_entropy:
+  0.353`, `modal_path_share: 0.933`** — the first nonzero variety
+  numbers in this entire project. `modal_path_share` (28/30) matches
+  the empirical 2-exception count exactly.
+- Regression note: adding required tools to the Warehouse Agent's and
+  broad-autonomy actor's decision trees broke every existing test
+  fixture that pre-dated those tools (`TOOL_NOT_IN_POLICY` across 12
+  tests) — expected, since those fixtures' tool policies were written
+  before the tools existed. Fixed by adding the 3 new tools +
+  `may_message_agents` to every affected fixture (6 test files), and
+  relaxed one now-provably-flaky exact-count assertion (handoff count)
+  to `assertGreaterEqual` since a quality exception now legitimately
+  adds one more agent-chosen message on top of the structural handoffs.
+  46/46 tests pass (33 existing + 13 new).
+- **Deviation:** task assignment's "policy" is always `fixed` today —
+  `round_robin`/multi-candidate pooling needs `EORL Architecture Actor
+  Slot` to support multiple agent templates per `slot_id`, which would
+  be a breaking change to `slot_map`'s shape used throughout the
+  orchestrator; deferred rather than risked in this milestone.
+  `has_decision_authority`/`has_assignment_authority` are recorded but
+  not yet enforced at runtime (no provider branches on them yet).
+
+---
+
+## 6. Next: SOTA Milestone 2 (counterfactual branching) or beyond
+
+SOTA Milestone 1 closed the structural gaps that blocked everything
+downstream. The roadmap in section 4 above still applies for what comes
+next (counterfactual branching → memory expansion/real LLM provider →
+Construct Registry/Experiment Builder expansion → analytics workbench
+phase 1). Confirm before continuing further, same as before starting
+Milestone 1.

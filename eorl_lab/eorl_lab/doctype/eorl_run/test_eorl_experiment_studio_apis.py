@@ -18,7 +18,11 @@ SPECIALIST_ROLE_POLICIES = {
 	},
 	"warehouse_agent": {
 		"may_submit_documents": 1,
-		"tools": ["get_purchase_order", "create_purchase_receipt", "submit_purchase_receipt"],
+		"may_message_agents": 1,
+		"tools": [
+			"get_purchase_order", "create_purchase_receipt", "submit_purchase_receipt",
+			"inspect_received_goods", "escalate_quality_exception", "message_agent",
+		],
 	},
 	"accounts_payable_agent": {
 		"may_submit_documents": 1,
@@ -44,6 +48,7 @@ BROAD_AUTONOMY_TOOLS = [
 	"create_purchase_order", "submit_purchase_order", "create_purchase_receipt",
 	"submit_purchase_receipt", "create_purchase_invoice", "submit_purchase_invoice",
 	"create_payment_entry", "submit_payment_entry",
+	"inspect_received_goods", "escalate_quality_exception", "message_agent",
 ]
 
 
@@ -66,6 +71,7 @@ class TestEORLExperimentStudioAPIs(FrappeTestCase):
 					"policy_name": f"Test {key} Policy M6",
 					"may_submit_documents": spec.get("may_submit_documents", 0),
 					"may_approve": spec.get("may_approve", 0),
+					"may_message_agents": spec.get("may_message_agents", 0),
 					"allowed_semantic_tools": [{"tool_name": t} for t in spec["tools"]],
 				}
 			).insert(ignore_if_duplicate=True)
@@ -95,6 +101,7 @@ class TestEORLExperimentStudioAPIs(FrappeTestCase):
 				"policy_name": "Test Broad Autonomy Policy M6",
 				"may_submit_documents": 1,
 				"may_approve": 1,
+				"may_message_agents": 1,
 				"allowed_semantic_tools": [{"tool_name": t} for t in BROAD_AUTONOMY_TOOLS],
 			}
 		).insert(ignore_if_duplicate=True)

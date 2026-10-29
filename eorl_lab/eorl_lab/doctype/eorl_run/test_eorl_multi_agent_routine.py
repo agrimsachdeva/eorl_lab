@@ -18,7 +18,11 @@ ROLE_POLICIES = {
 	"warehouse_agent": {
 		"policy_name": "Test Warehouse Policy M3",
 		"may_submit_documents": 1,
-		"tools": ["get_purchase_order", "create_purchase_receipt", "submit_purchase_receipt"],
+		"may_message_agents": 1,
+		"tools": [
+			"get_purchase_order", "create_purchase_receipt", "submit_purchase_receipt",
+			"inspect_received_goods", "escalate_quality_exception", "message_agent",
+		],
 	},
 	"accounts_payable_agent": {
 		"policy_name": "Test Accounts Payable Policy M3",
@@ -60,6 +64,7 @@ class TestEORLMultiAgentRoutine(FrappeTestCase):
 					"policy_name": spec["policy_name"],
 					"may_submit_documents": spec.get("may_submit_documents", 0),
 					"may_approve": spec.get("may_approve", 0),
+					"may_message_agents": spec.get("may_message_agents", 0),
 					"allowed_semantic_tools": [{"tool_name": t} for t in spec["tools"]],
 				}
 			).insert(ignore_if_duplicate=True)
@@ -113,9 +118,14 @@ class TestEORLMultiAgentRoutine(FrappeTestCase):
 			self.assertIn(role_label, actor_slots)
 
 		# Explicit, logged handoffs between every consecutive pair of
-		# roles (spec section 15) -- three handoffs for four roles.
-		self.assertEqual(event_types.count("agent_message_sent"), 3)
-		self.assertEqual(event_types.count("agent_message_received"), 3)
+		# roles (spec section 15) -- at least three structural handoffs
+		# for four roles. Not exact equality: if the ground-truth-driven
+		# quality inspection (SOTA Milestone 1) happens to fail for this
+		# seed's specific receipt, the Warehouse Agent also sends one
+		# agent-chosen exception notification via message_agent, adding
+		# one more pair -- a real, not a flaky, source of variation.
+		self.assertGreaterEqual(event_types.count("agent_message_sent"), 3)
+		self.assertGreaterEqual(event_types.count("agent_message_received"), 3)
 
 		# The full write chain happened and was observed, in order.
 		for required in [
