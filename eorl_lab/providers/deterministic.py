@@ -1,45 +1,165 @@
 from eorl_lab.providers.base import ModelProvider, ModelRequest, ModelResponse
 
 
+def _decision(action, args, *, stop, basis, confidence=0.85, assessment=""):
+	return {
+		"decision_version": "1.0",
+		"state_assessment": assessment,
+		"intended_action": action,
+		"tool_arguments": args,
+		"recipient": None,
+		"confidence": confidence,
+		"decision_basis": basis,
+		"stop": stop,
+	}
+
+
 class DeterministicProvider(ModelProvider):
 	"""Rule-based provider for tests and reproducible demos (spec section
-	8.1). Encodes one fixed policy for the procure-to-pay vertical slice:
-	sense supplier options first, then issue a purchase order against the
-	first candidate supplier."""
+	8.1). Milestone 2 scripted one role; Milestone 3 scripts one fixed
+	policy per organizational role in the specialist/handoff architecture
+	(spec section 2.3 Architecture A). Each method reads only `case`,
+	`handoff` (what the previous actor passed forward), and `scratch`
+	(this actor's own accumulated tool results this turn) -- never global
+	ground truth the role isn't entitled to (spec section 8.3)."""
 
 	def generate(self, request: ModelRequest) -> ModelResponse:
-		case = request.context.get("case", {})
-		already_observed = request.context.get("already_observed_suppliers", False)
+		role = request.context.get("organizational_role")
+		handler = getattr(self, f"_decide_{self._slug(role)}", None)
+		if handler is None:
+			raise ValueError(f"DeterministicProvider has no scripted policy for role: {role!r}")
 
-		if not already_observed:
-			decision = {
-				"decision_version": "1.0",
-				"state_assessment": "No supplier options observed yet for this case.",
-				"intended_action": "get_supplier_options",
-				"tool_arguments": {"item_code": case.get("item_code")},
-				"recipient": None,
-				"confidence": 0.9,
-				"decision_basis": "Deterministic policy: always sense before acting.",
-				"stop": False,
-			}
-		else:
-			candidates = case.get("candidate_suppliers") or []
-			supplier = candidates[0] if candidates else None
-			decision = {
-				"decision_version": "1.0",
-				"state_assessment": f"Observed {len(candidates)} candidate supplier(s).",
-				"intended_action": "create_purchase_order",
-				"tool_arguments": {
-					"supplier": supplier,
-					"item_code": case.get("item_code"),
-					"qty": case.get("qty"),
-					"company": case.get("company"),
-					"warehouse": case.get("warehouse"),
-				},
-				"recipient": None,
-				"confidence": 0.85,
-				"decision_basis": "Deterministic policy: act on the first candidate supplier after sensing.",
-				"stop": True,
-			}
-
+		decision = handler(request.context)
 		return ModelResponse(decision=decision, provider="deterministic", resolved_model="deterministic-v1")
+
+	@staticmethod
+	def _slug(role):
+		return (role or "").strip().lower().replace(" ", "_")
+
+	def _decide_purchasing_agent(self, context):
+		case = context["case"]
+		scratch = context["scratch"]
+
+		if "candidate_suppliers" not in scratch:
+			return _decision(
+				"get_supplier_options",
+				{"item_code": case["item_code"]},
+				stop=False,
+				basis="Deterministic policy: sense supplier options before acting.",
+				assessment="No supplier options observed yet for this case.",
+			)
+
+		candidates = scratch["candidate_suppliers"] or []
+		supplier = candidates[0] if candidates else None
+		return _decision(
+			"create_purchase_order",
+			{
+				"supplier": supplier,
+				"item_code": case["item_code"],
+				"qty": case["qty"],
+				"company": case["company"],
+				"warehouse": case["warehouse"],
+			},
+			stop=True,
+			basis="Deterministic policy: act on the first candidate supplier after sensing.",
+			assessment=f"Observed {len(candidates)} candidate supplier(s).",
+		)
+
+	def _decide_purchasing_manager_agent(self, context):
+		handoff = context["handoff"]
+		scratch = context["scratch"]
+
+		if "purchase_order_status" not in scratch:
+			return _decision(
+				"get_purchase_order",
+				{"name": handoff["purchase_order"]},
+				stop=False,
+				basis="Deterministic policy: review the PO before approving it.",
+				assessment="Reviewing handed-off purchase order before approval.",
+			)
+
+		return _decision(
+			"submit_purchase_order",
+			{"name": handoff["purchase_order"]},
+			stop=True,
+			basis="Deterministic policy: approve a reviewed, in-policy PO.",
+			assessment=f"PO status observed as {scratch.get('purchase_order_status')}; approving.",
+		)
+
+	def _decide_warehouse_agent(self, context):
+		handoff = context["handoff"]
+		scratch = context["scratch"]
+
+		if "purchase_order_status" not in scratch:
+			return _decision(
+				"get_purchase_order",
+				{"name": handoff["purchase_order"]},
+				stop=False,
+				basis="Deterministic policy: confirm what to receive before receiving it.",
+				assessment="Confirming approved PO before recording receipt.",
+			)
+
+		if "purchase_receipt" not in scratch:
+			return _decision(
+				"create_purchase_receipt",
+				{"purchase_order": handoff["purchase_order"]},
+				stop=False,
+				basis="Deterministic policy: receive against the approved PO.",
+				assessment="PO confirmed approved; recording receipt.",
+			)
+
+		return _decision(
+			"submit_purchase_receipt",
+			{"name": scratch["purchase_receipt"]},
+			stop=True,
+			basis="Deterministic policy: finalize the recorded receipt.",
+			assessment="Receipt recorded; submitting.",
+		)
+
+	def _decide_accounts_payable_agent(self, context):
+		handoff = context["handoff"]
+		scratch = context["scratch"]
+
+		if "purchase_receipt_status" not in scratch:
+			return _decision(
+				"get_receipt_status",
+				{"name": handoff["purchase_receipt"]},
+				stop=False,
+				basis="Deterministic policy: confirm the receipt before invoicing against it.",
+				assessment="Confirming submitted receipt before invoicing.",
+			)
+
+		if "purchase_invoice" not in scratch:
+			return _decision(
+				"create_purchase_invoice",
+				{"purchase_receipt": handoff["purchase_receipt"]},
+				stop=False,
+				basis="Deterministic policy: invoice against the confirmed receipt.",
+				assessment="Receipt confirmed; creating invoice.",
+			)
+
+		if not scratch.get("purchase_invoice_submitted"):
+			return _decision(
+				"submit_purchase_invoice",
+				{"name": scratch["purchase_invoice"]},
+				stop=False,
+				basis="Deterministic policy: submit the invoice before paying it.",
+				assessment="Invoice created; submitting.",
+			)
+
+		if "payment_entry" not in scratch:
+			return _decision(
+				"create_payment_entry",
+				{"purchase_invoice": scratch["purchase_invoice"]},
+				stop=False,
+				basis="Deterministic policy: pay the submitted invoice.",
+				assessment="Invoice submitted; creating payment entry.",
+			)
+
+		return _decision(
+			"submit_payment_entry",
+			{"name": scratch["payment_entry"]},
+			stop=True,
+			basis="Deterministic policy: finalize payment.",
+			assessment="Payment entry created; submitting to close the routine.",
+		)

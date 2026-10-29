@@ -1,4 +1,7 @@
 import frappe
+from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
+from erpnext.buying.doctype.purchase_order.purchase_order import make_purchase_receipt
+from erpnext.stock.doctype.purchase_receipt.purchase_receipt import make_purchase_invoice
 from frappe.utils import add_days, nowdate
 
 
@@ -25,6 +28,39 @@ def get_supplier_options(item_code: str, limit: int = 5) -> dict:
 	return {"item_code": item_code, "candidate_suppliers": names}
 
 
+def get_purchase_order(name: str) -> dict:
+	"""Read/sensing tool: the Purchasing Manager and Warehouse Agent sense
+	the PO rather than blindly trusting the handoff message's claim about
+	it (spec section 4: ERP state is authoritative, not agent narrative)."""
+	if not frappe.db.exists("Purchase Order", name):
+		frappe.throw(f"Unknown Purchase Order: {name}")
+	po = frappe.get_doc("Purchase Order", name)
+	return {
+		"purchase_order": po.name,
+		"purchase_order_status": po.status,
+		"docstatus": po.docstatus,
+		"supplier": po.supplier,
+		"company": po.company,
+		"grand_total": po.grand_total,
+		"items": [{"item_code": d.item_code, "qty": d.qty, "warehouse": d.warehouse} for d in po.items],
+	}
+
+
+def get_receipt_status(name: str) -> dict:
+	"""Read/sensing tool: the Accounts Payable Agent confirms the receipt
+	was actually submitted before invoicing against it."""
+	if not frappe.db.exists("Purchase Receipt", name):
+		frappe.throw(f"Unknown Purchase Receipt: {name}")
+	pr = frappe.get_doc("Purchase Receipt", name)
+	return {
+		"purchase_receipt": pr.name,
+		"purchase_receipt_status": pr.status,
+		"docstatus": pr.docstatus,
+		"purchase_order": pr.items[0].purchase_order if pr.items else None,
+		"grand_total": pr.grand_total,
+	}
+
+
 def create_purchase_order(
 	*,
 	supplier: str,
@@ -36,11 +72,9 @@ def create_purchase_order(
 	schedule_days: int = 7,
 ) -> dict:
 	"""Consequential action (spec section 10). Creates -- but does not
-	submit -- a real ERPNext Purchase Order. Submission is a separate,
-	separately-authorized tool (submit_purchase_order), not implemented
-	until a later milestone. Runs under the caller's normal ERPNext
-	permissions (no ignore_permissions) so ERPNext roles stay a real
-	defense-in-depth layer, per spec section 9."""
+	submit -- a real ERPNext Purchase Order. Runs under the caller's
+	normal ERPNext permissions (no ignore_permissions), per section 9's
+	defense-in-depth requirement."""
 	if not frappe.db.exists("Supplier", supplier):
 		frappe.throw(f"Unknown supplier: {supplier}")
 	if not frappe.db.exists("Item", item_code):
@@ -76,3 +110,60 @@ def create_purchase_order(
 		"before_draft_count_for_supplier": before_count,
 		"after_draft_count_for_supplier": after_count,
 	}
+
+
+def submit_purchase_order(name: str) -> dict:
+	"""Consequential action: the Purchasing Manager Agent's approval step.
+	A real ERPNext docstatus transition (draft -> submitted), not a
+	cosmetic flag -- if the document fails ERPNext's own validation, this
+	call fails loudly rather than being silently repaired (spec section 28)."""
+	po = frappe.get_doc("Purchase Order", name)
+	po.submit()
+	return {"purchase_order": po.name, "purchase_order_submitted": True, "docstatus": po.docstatus}
+
+
+def create_purchase_receipt(purchase_order: str) -> dict:
+	"""Consequential action: the Warehouse Agent records goods received
+	against a submitted PO, via ERPNext's own PO->Receipt mapper so taxes,
+	UOM conversion, and account defaults are resolved the same way a human
+	user's 'Make > Purchase Receipt' button would resolve them."""
+	pr = make_purchase_receipt(purchase_order)
+	pr.insert()
+	return {"purchase_receipt": pr.name, "docstatus": pr.docstatus, "purchase_order": purchase_order}
+
+
+def submit_purchase_receipt(name: str) -> dict:
+	pr = frappe.get_doc("Purchase Receipt", name)
+	pr.submit()
+	return {"purchase_receipt": pr.name, "purchase_receipt_submitted": True, "docstatus": pr.docstatus}
+
+
+def create_purchase_invoice(purchase_receipt: str) -> dict:
+	"""Consequential action: the Accounts Payable Agent invoices against a
+	submitted receipt (not the raw PO), via ERPNext's Receipt->Invoice
+	mapper, matching the three-way PO/Receipt/Invoice relationship real
+	accounts-payable processing depends on."""
+	pi = make_purchase_invoice(purchase_receipt)
+	pi.insert()
+	return {"purchase_invoice": pi.name, "docstatus": pi.docstatus, "purchase_receipt": purchase_receipt}
+
+
+def submit_purchase_invoice(name: str) -> dict:
+	pi = frappe.get_doc("Purchase Invoice", name)
+	pi.submit()
+	return {"purchase_invoice": pi.name, "purchase_invoice_submitted": True, "docstatus": pi.docstatus}
+
+
+def create_payment_entry(purchase_invoice: str) -> dict:
+	"""Consequential action: pays a submitted invoice via ERPNext's own
+	Invoice->Payment Entry mapper (resolves bank/cash account, exchange
+	rate, and outstanding amount the same way the ERPNext UI would)."""
+	pe = get_payment_entry("Purchase Invoice", purchase_invoice)
+	pe.insert()
+	return {"payment_entry": pe.name, "docstatus": pe.docstatus, "purchase_invoice": purchase_invoice}
+
+
+def submit_payment_entry(name: str) -> dict:
+	pe = frappe.get_doc("Payment Entry", name)
+	pe.submit()
+	return {"payment_entry": pe.name, "payment_entry_submitted": True, "docstatus": pe.docstatus}

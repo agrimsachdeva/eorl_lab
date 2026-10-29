@@ -3,11 +3,21 @@ from typing import Optional
 
 import frappe
 
-# Milestone 2 only registers these two tools (eorl_lab.erp.registry); the
-# split is used to decide which events/limits apply, independent of the
-# registry itself so later milestones can extend both lists together.
-READ_TOOLS = {"get_supplier_options"}
-WRITE_TOOLS = {"create_purchase_order"}
+# Milestone 3 extends the read/write split to cover the full
+# procure-to-pay chain (spec section 10). The split only decides which
+# events/limits apply -- the actual allow/deny is always the per-actor
+# EORL Tool Policy's allowed_semantic_tools, never this set membership.
+READ_TOOLS = {"get_supplier_options", "get_purchase_order", "get_receipt_status"}
+WRITE_TOOLS = {
+	"create_purchase_order",
+	"submit_purchase_order",
+	"create_purchase_receipt",
+	"submit_purchase_receipt",
+	"create_purchase_invoice",
+	"submit_purchase_invoice",
+	"create_payment_entry",
+	"submit_payment_entry",
+}
 
 
 @dataclass
@@ -52,5 +62,8 @@ def evaluate(*, tool_policy_name: str, tool_name: str, tool_args: dict) -> Autho
 				policy.modified,
 				{"max_write_actions_per_episode": max_writes},
 			)
+
+	if tool_name.startswith("submit_") and not policy.may_submit_documents:
+		return AuthorityDecision(False, "SUBMIT_NOT_PERMITTED", policy.modified, {"tool": tool_name})
 
 	return AuthorityDecision(True, "POLICY_ALLOW", policy.modified, {"tool": tool_name})
