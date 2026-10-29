@@ -1,0 +1,14 @@
+{
+ "doctype": "Page",
+ "module": "EORL Lab",
+ "name": "eorl-experiment-studio",
+ "page_name": "eorl-experiment-studio",
+ "title": "EORL Experiment Studio",
+ "standard": "Yes",
+ "system_page": 0,
+ "roles": [
+  {"role": "System Manager"},
+  {"role": "EORL Administrator"},
+  {"role": "EORL Researcher"}
+ ]
+}

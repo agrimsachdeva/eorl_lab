@@ -1,0 +1,15 @@
+{
+ "doctype": "Page",
+ "module": "EORL Lab",
+ "name": "eorl-trace-explorer",
+ "page_name": "eorl-trace-explorer",
+ "title": "EORL Trace Explorer",
+ "standard": "Yes",
+ "system_page": 0,
+ "roles": [
+  {"role": "System Manager"},
+  {"role": "EORL Administrator"},
+  {"role": "EORL Researcher"},
+  {"role": "EORL Viewer"}
+ ]
+}

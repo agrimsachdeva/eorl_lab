@@ -1,0 +1,15 @@
+{
+ "doctype": "Page",
+ "module": "EORL Lab",
+ "name": "eorl-reproducibility",
+ "page_name": "eorl-reproducibility",
+ "title": "EORL Reproducibility",
+ "standard": "Yes",
+ "system_page": 0,
+ "roles": [
+  {"role": "System Manager"},
+  {"role": "EORL Administrator"},
+  {"role": "EORL Researcher"},
+  {"role": "EORL Viewer"}
+ ]
+}

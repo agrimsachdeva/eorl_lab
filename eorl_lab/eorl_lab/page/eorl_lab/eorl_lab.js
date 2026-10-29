@@ -7,26 +7,51 @@ frappe.pages['eorl-lab'].on_page_load = function (wrapper) {
 
 	page.add_label('Executable Organizational Routine Laboratory');
 
+	const studio_pages = [
+		{ title: 'Experiment Studio', route: 'eorl-experiment-studio' },
+		{ title: 'Run Monitor', route: 'eorl-run-monitor' },
+		{ title: 'Trace Explorer', route: 'eorl-trace-explorer' },
+		{ title: 'Compare Runs', route: 'eorl-compare-runs' },
+		{ title: 'Reproducibility / Export', route: 'eorl-reproducibility' },
+	];
+
 	const config_doctypes = [
 		'EORL Settings',
 		'EORL Model Profile',
 		'EORL Memory Profile',
 		'EORL Tool Policy',
 		'EORL Agent Template',
+		'EORL Architecture',
+		'EORL Regime Shift',
+		'EORL Experiment',
 	];
 
 	const $body = $(
 		`<div class="eorl-lab-home" style="padding: 15px;">
 			<p class="text-muted">
-				Milestone 1: app skeleton and configuration. Experiment Studio, Agent Studio,
-				Architecture Designer, Scenario Studio, Run Monitor, Trace Explorer, Compare Runs,
-				and Export are not implemented yet (later milestones).
+				Agent Studio, Architecture Designer (graphical), and Scenario Studio
+				are not built yet -- architectures and agents are composed via their
+				DocType forms (linked below) for now.
 			</p>
+			<h5>Studio &amp; Monitoring</h5>
+			<div class="row eorl-studio-links" style="margin-bottom: 20px;"></div>
+			<h5>Configuration</h5>
 			<div class="row eorl-config-links"></div>
 		</div>`
 	).appendTo(page.body);
 
-	const $row = $body.find('.eorl-config-links');
+	const $studioRow = $body.find('.eorl-studio-links');
+	const $configRow = $body.find('.eorl-config-links');
+
+	studio_pages.forEach((p) => {
+		$(
+			`<div class="col-sm-4" style="margin-bottom: 15px;">
+				<div class="frappe-card" style="padding: 12px;">
+					<a href="/app/${p.route}">${p.title}</a>
+				</div>
+			</div>`
+		).appendTo($studioRow);
+	});
 
 	config_doctypes.forEach((doctype) => {
 		$(
@@ -35,6 +60,6 @@ frappe.pages['eorl-lab'].on_page_load = function (wrapper) {
 					<a href="/app/${frappe.router.slug(doctype)}">${doctype}</a>
 				</div>
 			</div>`
-		).appendTo($row);
+		).appendTo($configRow);
 	});
 };

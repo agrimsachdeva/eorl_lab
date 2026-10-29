@@ -40,10 +40,19 @@ bench --site erpnext.localhost execute eorl_lab.runtime.orchestrator.run_archite
   --kwargs '{"architecture_name": "Demo Specialist Handoff", "seed": 123, "episode_count": 3, "regime_shift": "Demo Demand Shock"}'
 bench --site erpnext.localhost execute eorl_lab.runtime.orchestrator.run_architecture \
   --kwargs '{"architecture_name": "Demo Broad Autonomy", "seed": 123, "episode_count": 3, "regime_shift": "Demo Demand Shock"}'
+
+# validate and launch a full EORL Experiment pilot (Milestone 6)
+bench --site erpnext.localhost execute eorl_lab.api.experiments.validate_experiment \
+  --kwargs '{"experiment_name": "Demo Adaptive Repertoire Pilot"}'
+bench --site erpnext.localhost execute eorl_lab.api.experiments.launch_pilot \
+  --kwargs '{"experiment_name": "Demo Adaptive Repertoire Pilot"}'
 ```
 
 Browse results in the Desk at `erpnext.localhost:8000/app/eorl-run`,
-`/app/eorl-episode`, `/app/eorl-event`, `/app/eorl-memory-record`.
+`/app/eorl-episode`, `/app/eorl-event`, `/app/eorl-memory-record`, or through
+the Studio pages: `/app/eorl-lab`, `/app/eorl-experiment-studio`,
+`/app/eorl-run-monitor`, `/app/eorl-trace-explorer`, `/app/eorl-compare-runs`,
+`/app/eorl-reproducibility`.
 
 ---
 
@@ -204,9 +213,84 @@ Browse results in the Desk at `erpnext.localhost:8000/app/eorl-run`,
 
 ---
 
+## Milestone 6 — Research front end
+
+**Delivered:**
+- DocType: `EORL Experiment`. **Deviation:** supports exactly the
+  one-factor, up-to-two-level design (`architecture_a` vs
+  `architecture_b`) Milestones 2–5 were built around, not a general
+  N-factor factorial table with explicit cell definitions (spec section
+  6.9). `cell_count()`/`total_run_count()` generalize trivially once a
+  real factor table exists; they don't today.
+- `eorl_lab/api/experiments.py` — `get_experiment_summary`,
+  `validate_experiment`, `launch_pilot` (runs synchronously within the
+  request for a small pilot, not queued as a background job — queued
+  execution is Milestone 9's scope). `launch_pilot` honors
+  `seed_strategy`: `paired` gives `architecture_a`/`architecture_b` the
+  same seed per repetition; `independent` offsets by architecture index.
+- `eorl_lab/api/traces.py`, `eorl_lab/api/metrics.py`,
+  `eorl_lab/api/exports.py` — read-only APIs over the existing
+  Run/Episode/Event/Memory-Record tables; nothing new is computed beyond
+  what Milestones 2–5 already wrote.
+- Five Desk pages, all functional (not mockups), backed by the APIs
+  above:
+  - `/app/eorl-experiment-studio` — pick a saved `EORL Experiment`,
+    see the computed cell/run count, Validate Only / Launch Pilot.
+    **Deviation:** experiments/architectures/agents are composed via
+    their ordinary DocType forms (linked from this page), not the full
+    10-step wizard of spec section 7.5.
+  - `/app/eorl-run-monitor` — polls every 5s, status pill, click-through
+    to Trace Explorer.
+  - `/app/eorl-trace-explorer` — run → episode → chronological event
+    table, with event-type/actor/failures-only filters, expandable
+    payloads. The page spec calls "essential for auditability"; it
+    reads directly off `EORL Event`, nothing is pre-aggregated or
+    summarized away.
+  - `/app/eorl-compare-runs` — multi-select runs, side-by-side raw
+    aggregates (episode/event counts, success rate, distinct-actor
+    count). **Deviation:** no process-path/coherence/repertoire/entropy
+    metrics yet (spec section 17) — that needs the process-path
+    extraction layer, Milestone 7.
+  - `/app/eorl-reproducibility` — pick a run, download a JSON bundle
+    (manifest + episodes + events + memory records) via a client-side
+    Blob download. **Deviation:** this is the raw-data half of spec
+    section 7.9's bundle (no resolved prompts, no replayable scenario
+    stream, no computed metrics, no one-click re-run) — the full
+    reproducibility artifact is Milestone 8.
+  - `/app/eorl-lab` (updated) — now links to all five pages above, not
+    just the config DocTypes.
+  - **Not built:** Agent Studio, Architecture Designer (graphical),
+    Scenario Studio — all explicitly deferred; composing agents and
+    architectures still goes through their plain DocType forms.
+- One bug caught and fixed during this milestone: a test that tried to
+  create an `EORL Experiment` with a dangling `Link` reference to prove
+  `validate_experiment` catches it — Frappe's own link validation
+  rejected the insert before my code ever ran. Fixed by constructing
+  that edge case with `ignore_links=True` (simulating a regime shift
+  deleted *after* being referenced, which Frappe's own validation
+  doesn't protect against).
+- **Verified live, not just tested:** created a real `EORL Experiment`
+  ("Demo Adaptive Repertoire Pilot": both architectures, the Milestone 5
+  demand shock, 2 repetitions, paired seeds, base seed 777) and launched
+  it through the actual API. All 4 runs succeeded; repetition 0 used
+  seed 777 for *both* architectures, repetition 1 used seed 778 for
+  *both* — the pairing held under the real multi-run launch path, not
+  just a two-run test. Then exercised Compare Runs and Export against
+  those same real runs: `compare_runs` correctly reported 4 vs. 1
+  distinct actors at 100% success each; `export_run_bundle` returned the
+  full 3-episode, 323-event bundle for the broad-autonomy run.
+- Note on verification scope: I did not drive these pages through an
+  actual browser (no Playwright/browser automation set up for this
+  project). I verified every whitelisted API function directly via
+  `bench execute` and via the test suite, and reviewed the JS by hand —
+  but the rendered pages themselves are unverified by me. Worth a manual
+  look before relying on them.
+
+---
+
 ## Test coverage so far
 
-11 tests, all green, spanning Milestones 1–5:
+14 tests, all green, spanning Milestones 1–6:
 - `test_eorl_settings.py`, `test_eorl_agent_template.py` (M1)
 - `test_eorl_run.py` (M2, incl. an authority-denial test)
 - `test_eorl_multi_agent_routine.py` (M3, incl. a submit-rights-denial
@@ -215,6 +299,9 @@ Browse results in the Desk at `erpnext.localhost:8000/app/eorl-run`,
   memory-causality test and a no-memory-profile test)
 - `test_eorl_architectures_and_shock.py` (M5, incl. the paired-seed/shock
   acceptance test)
+- `test_eorl_experiment_studio_apis.py` (M6: cell/run-count math,
+  validation incl. the stale-link edge case, a full paired-seed pilot
+  launch exercised through Trace Explorer/Compare Runs/Export's own APIs)
 
 Run: `bench --site erpnext.localhost run-tests --app eorl_lab`
 
@@ -222,18 +309,21 @@ Run: `bench --site erpnext.localhost run-tests --app eorl_lab`
 
 ## What's explicitly NOT built yet (honest gap list)
 
-- `EORL Experiment`, `EORL Scenario` DocTypes — Milestone 6's Experiment
-  Studio needs the former; the full distributional scenario generator
-  (section 11) needs the latter. The current generator is a fixed case
-  with deterministic quantity variation, not a configurable distribution.
-- Any front-end beyond the Milestone 1 placeholder page — Experiment
-  Studio, Agent Studio, Architecture Designer, Scenario Studio, Run
-  Monitor, Trace Explorer, Compare Runs, Export/Reproducibility (spec
-  section 7) are all Milestone 6.
+- `EORL Scenario` DocType — the full distributional scenario generator
+  (spec section 11: demand/lead-time/quality distributions, exception
+  families) needs it. The current generator is a fixed case with
+  deterministic quantity variation, not a configurable distribution.
+- `EORL Experiment`'s design is one-factor/two-level only (see Milestone
+  6 above) — a real N-factor factorial table isn't built.
+- Agent Studio, Architecture Designer (graphical node-edge editor),
+  Scenario Studio — agents and architectures are composed via plain
+  DocType forms, not purpose-built composition UIs.
 - Process-path extraction and theory metrics (coherence, repertoire,
   entropy, recovery curves — spec section 17) — Milestone 7.
-- One-click reproducibility export/import (JSONL/CSV/YAML bundle,
-  section 18) — Milestone 8.
+- One-click reproducibility export/import (resolved prompts, replayable
+  scenario stream, computed metrics, re-run from bundle — section 18) —
+  Milestone 8. Milestone 6 only exports raw run/episode/event/memory
+  data.
 - External/HPC worker execution, Parquet export, isolated concurrent
   environments (section 20) — Milestone 9.
 - Inter-agent communication is currently orchestrator-enforced handoffs
@@ -244,7 +334,10 @@ Run: `bench --site erpnext.localhost run-tests --app eorl_lab`
 - `erp_research` migration/parity work (section 25 Phase A–D) hasn't
   started — nothing has been reused from the legacy app yet, which is
   fine (not required), but also not yet verified.
+- The five new Desk pages have not been exercised in an actual browser
+  by me (see Milestone 6 note above) — API-level and JS-review
+  verification only.
 
 ---
 
-*Last updated: end of Milestone 5.*
+*Last updated: end of Milestone 6.*
