@@ -13,14 +13,16 @@ from eorl_lab.runtime import authority
 from eorl_lab.scenarios.procurement import generate_case
 
 # Explicit step limit per actor turn (spec section 13: "no run should
-# hang indefinitely"). The longest scripted turn (Accounts Payable: sense,
-# invoice, submit invoice, pay, submit payment) needs 5; the ceiling is a
-# safety bound, not the expected length.
-MAX_STEPS_PER_ACTOR_TURN = 8
+# hang indefinitely"). The broad-autonomy actor's single continuous turn
+# (sense, create PO, sense PO, submit PO, create receipt, submit receipt,
+# sense receipt, create invoice, submit invoice, create payment, submit
+# payment = 11 steps) needs more headroom than any one specialist stage;
+# the ceiling is a safety bound, not the expected length.
+MAX_STEPS_PER_ACTOR_TURN = 15
 
 _RESULT_ID_KEYS = ("purchase_order", "purchase_receipt", "purchase_invoice", "payment_entry")
 
-# Memory domain used for every role in Milestone 4's single routine; a
+# Memory domain used for every role in the procure-to-pay routine; a
 # richer domain taxonomy (e.g. one per exception family) becomes relevant
 # once the Scenario Studio's exception families exist.
 MEMORY_DOMAIN = "procurement"
@@ -168,12 +170,12 @@ def _run_actor_turn(
 
 def _handoff(ctx: ExperimentContext, from_role: str, to_role: str, content: dict):
 	"""Explicit, observable inter-agent communication (spec section 15).
-	For this specialist/handoff architecture (spec section 2.3 Architecture
+	For the specialist/handoff architecture (spec section 2.3 Architecture
 	A), the handoff topology is enforced by the orchestrator itself, not
 	left to agent discretion -- that is what "explicit handoffs across
 	process stages; limited cross-stage autonomy" means for Architecture
-	A. Agent-initiated messaging becomes relevant for the broader-autonomy
-	architecture (Architecture B), a later milestone."""
+	A. The broad-autonomy architecture (Architecture B) has no handoffs
+	at all by construction: one actor, zero messages."""
 	emit_event(ctx, "agent_message_sent", actor_slot=from_role, target_type="agent", target_id=to_role, payload=content)
 	emit_event(ctx, "agent_message_received", actor_slot=to_role, target_type="agent", target_id=from_role, payload=content)
 
@@ -184,13 +186,15 @@ def _summarize_actor_action(role: str, scratch: dict) -> str:
 	`scratch` dict so memory records stay human-scannable rather than
 	dumping full ERP payloads into every row (the full payload is still
 	available via payload_json)."""
-	if role == "Purchasing Agent" and scratch.get("purchase_order"):
+	if role in ("Purchasing Agent", "General Purchasing Agent") and scratch.get("purchase_order"):
 		return f"ordered_from:{scratch.get('supplier')}"
 	if role == "Purchasing Manager Agent" and scratch.get("purchase_order_submitted"):
 		return f"approved:{scratch.get('purchase_order')}"
 	if role == "Warehouse Agent" and scratch.get("purchase_receipt_submitted"):
 		return f"received:{scratch.get('purchase_receipt')}"
 	if role == "Accounts Payable Agent" and scratch.get("payment_entry_submitted"):
+		return f"paid:{scratch.get('payment_entry')}"
+	if role == "General Purchasing Agent" and scratch.get("payment_entry_submitted"):
 		return f"paid:{scratch.get('payment_entry')}"
 	return "no_completed_action"
 
@@ -310,7 +314,7 @@ def run_demo_episode(agent_template_name: str, seed: int = 42) -> dict:
 	return {"run": run.name, "episode": episode.name, "outcome": outcome, "event_count": run.event_count}
 
 
-# role name -> (agent_templates dict key, handoff builder from accumulated routine_state)
+# role name -> (slot_map dict key, handoff builder from accumulated routine_state)
 _SPECIALIST_SEQUENCE = [
 	("Purchasing Agent", "purchasing_agent", lambda state: {}),
 	("Purchasing Manager Agent", "purchasing_manager_agent", lambda state: {"purchase_order": state["purchase_order"]}),
@@ -319,43 +323,91 @@ _SPECIALIST_SEQUENCE = [
 ]
 
 
-def _snapshot_agent_templates(agent_templates: dict) -> dict:
-	"""Resolve + snapshot each bound template at run start (spec section
-	8.4): "resolve templates; snapshot prompts; snapshot model profiles;
-	snapshot tool policies". Immutable for the life of the run even if the
-	underlying EORL Agent Template document is edited afterwards."""
-	snapshot = {}
-	for role_key, template_name in agent_templates.items():
-		agent = frappe.get_doc("EORL Agent Template", template_name)
-		snapshot[role_key] = {
-			"template": agent.name,
-			"organizational_role": agent.organizational_role,
-			"model_profile": agent.model_profile,
-			"memory_profile": agent.memory_profile,
-			"tool_policy": agent.tool_policy,
-			"initial_system_instructions": agent.initial_system_instructions,
-		}
-	return snapshot
+def _run_specialist_episode(ctx: ExperimentContext, slot_map: dict, case: dict, provider) -> dict:
+	"""Architecture A (specialist/handoff, spec section 2.3): four
+	persistent actor slots, each restricted to its own tools, hand off
+	one full procure-to-pay routine with explicit, logged communication
+	between stages. `slot_map` maps the slot keys in _SPECIALIST_SEQUENCE
+	to EORL Agent Template names."""
+	routine_state: dict = {}
+	outcome = {"success": False, "stage_results": {}}
+
+	previous_role = None
+	completed_all_stages = True
+
+	for role_name, slot_key, handoff_fn in _SPECIALIST_SEQUENCE:
+		agent_template_name = slot_map[slot_key]
+		agent = frappe.get_doc("EORL Agent Template", agent_template_name)
+
+		try:
+			handoff = handoff_fn(routine_state)
+		except KeyError as exc:
+			outcome["failure_reason"] = f"cannot hand off to {role_name}: missing {exc} from prior stage"
+			completed_all_stages = False
+			break
+
+		if previous_role is not None:
+			_handoff(ctx, previous_role, role_name, {"handoff": handoff})
+
+		retrieved_memory = _retrieve_memory(ctx, agent, ctx.run_id)
+		stage_scratch, stage_success, stage_failure_reason = _run_actor_turn(
+			ctx, agent, provider, case, handoff, memory=retrieved_memory
+		)
+		_write_memory(ctx, agent, ctx.run_id, ctx.episode_id, case, stage_scratch, stage_success)
+
+		routine_state.update(stage_scratch)
+		outcome["stage_results"][role_name] = stage_scratch
+
+		if not stage_success:
+			outcome["failure_reason"] = stage_failure_reason
+			completed_all_stages = False
+			break
+
+		previous_role = role_name
+
+	outcome["success"] = completed_all_stages
+	outcome["purchase_order"] = routine_state.get("purchase_order")
+	outcome["purchase_receipt"] = routine_state.get("purchase_receipt")
+	outcome["purchase_invoice"] = routine_state.get("purchase_invoice")
+	outcome["payment_entry"] = routine_state.get("payment_entry")
+	return outcome
+
+
+def _run_broad_autonomy_episode(ctx: ExperimentContext, slot_map: dict, case: dict, provider) -> dict:
+	"""Architecture B (broad autonomy, spec section 2.3): one actor
+	performs every stage of the same routine itself, with zero handoffs
+	-- "fewer mandatory handoffs; greater actor continuity" by
+	construction, using the same underlying decision rules as the
+	specialists (see providers.deterministic._choose_supplier) so the two
+	architectures are comparable rather than differing in what the
+	"right" decision even is."""
+	agent_template_name = slot_map["general_purchasing_agent"]
+	agent = frappe.get_doc("EORL Agent Template", agent_template_name)
+
+	retrieved_memory = _retrieve_memory(ctx, agent, ctx.run_id)
+	scratch, success, failure_reason = _run_actor_turn(ctx, agent, provider, case, handoff={}, memory=retrieved_memory)
+	_write_memory(ctx, agent, ctx.run_id, ctx.episode_id, case, scratch, success)
+
+	outcome = {
+		"success": success,
+		"stage_results": {"General Purchasing Agent": scratch},
+		"purchase_order": scratch.get("purchase_order"),
+		"purchase_receipt": scratch.get("purchase_receipt"),
+		"purchase_invoice": scratch.get("purchase_invoice"),
+		"payment_entry": scratch.get("payment_entry"),
+	}
+	if not success:
+		outcome["failure_reason"] = failure_reason
+	return outcome
 
 
 def run_specialist_routine(agent_templates: dict, seed: int = 42, episode_count: int = 1) -> dict:
-	"""Milestone 3's Architecture A (specialist/handoff, spec section 2.3),
-	extended in Milestone 4 with repeated episodes and local memory (spec
-	section 14). Four persistent actor slots -- Purchasing Agent,
-	Purchasing Manager Agent, Warehouse Agent, Accounts Payable Agent --
-	each restricted to its own tools by its own EORL Tool Policy, hand off
-	a full procure-to-pay routine (PO -> approval -> receipt -> invoice ->
-	payment) once per episode. Actor identity (the bound Agent Template)
-	is stable across episodes within the run; what persists across
-	episodes is each actor's own memory, retrieved and written through
-	its EORL Memory Profile if one is configured (NoMemoryStore otherwise
-	-- memory is an explicit experimental condition, not a hidden
-	default).
-
-	`agent_templates` maps role key -> EORL Agent Template name, e.g.
-	{"purchasing_agent": "...", "purchasing_manager_agent": "...",
-	 "warehouse_agent": "...", "accounts_payable_agent": "..."}
-	"""
+	"""Milestone 3's Architecture A entrypoint, kept for backward
+	compatibility and its existing tests. `run_architecture` (below) is
+	the config-driven entrypoint Milestone 5 adds; this function now
+	delegates its per-episode logic to the same `_run_specialist_episode`
+	helper `run_architecture` uses, so there is one specialist-handoff
+	implementation, not two."""
 
 	run = frappe.get_doc(
 		{
@@ -378,9 +430,52 @@ def run_specialist_routine(agent_templates: dict, seed: int = 42, episode_count:
 		},
 	)
 
+	episode_outcomes = _run_episode_loop(ctx, run, agent_templates, seed, episode_count, "specialist_handoff", regime_shift=None)
+
+	last_outcome = episode_outcomes[-1] if episode_outcomes else {"success": False}
+	return {
+		"run": run.name,
+		"episodes": episode_outcomes,
+		"outcome": last_outcome,
+		"event_count": run.event_count,
+	}
+
+
+def _snapshot_agent_templates(slot_map: dict) -> dict:
+	"""Resolve + snapshot each bound template at run start (spec section
+	8.4): "resolve templates; snapshot prompts; snapshot model profiles;
+	snapshot tool policies". Immutable for the life of the run even if the
+	underlying EORL Agent Template document is edited afterwards."""
+	snapshot = {}
+	for slot_key, template_name in slot_map.items():
+		agent = frappe.get_doc("EORL Agent Template", template_name)
+		snapshot[slot_key] = {
+			"template": agent.name,
+			"organizational_role": agent.organizational_role,
+			"model_profile": agent.model_profile,
+			"memory_profile": agent.memory_profile,
+			"tool_policy": agent.tool_policy,
+			"initial_system_instructions": agent.initial_system_instructions,
+		}
+	return snapshot
+
+
+def _run_episode_loop(
+	ctx: ExperimentContext,
+	run,
+	slot_map: dict,
+	seed: int,
+	episode_count: int,
+	coordination_mode: str,
+	regime_shift: Optional[dict],
+) -> list:
+	"""Shared multi-episode driver for both coordination modes. A failed
+	episode halts the run (spec section 13: a failure state, not a
+	silently-skipped one)."""
 	episode_outcomes = []
 	run_success = True
 	run_failure_reason = None
+	provider = DeterministicProvider()
 
 	for episode_number in range(1, episode_count + 1):
 		episode = frappe.get_doc(
@@ -388,14 +483,14 @@ def run_specialist_routine(agent_templates: dict, seed: int = 42, episode_count:
 				"doctype": "EORL Episode",
 				"run": run.name,
 				"episode_number": episode_number,
-				"phase": "warmup" if episode_number <= max(1, episode_count // 2) else "stable",
+				"phase": _phase_for_episode(episode_number, regime_shift),
 				"status": "running",
 				"started_at": now_datetime(),
 			}
 		).insert(ignore_permissions=True)
 		ctx.episode_id = episode.name
 
-		case = generate_case(seed=seed, episode=episode_number)
+		case = generate_case(seed=seed, episode=episode_number, regime_shift=regime_shift)
 		episode.scenario_case_id = case["case_id"]
 		episode.ground_truth_json = frappe.as_json(case["latent_ground_truth"])
 		episode.save(ignore_permissions=True)
@@ -403,48 +498,14 @@ def run_specialist_routine(agent_templates: dict, seed: int = 42, episode_count:
 		emit_event(ctx, "episode_initialized", payload={"episode": episode.name, "case_id": case["case_id"]})
 		emit_event(ctx, "environment_observed", payload={"case": case})
 
-		provider = DeterministicProvider()
-		routine_state: dict = {}
-		outcome = {"success": False, "stage_results": {}, "episode_number": episode_number}
+		if coordination_mode == "specialist_handoff":
+			outcome = _run_specialist_episode(ctx, slot_map, case, provider)
+		elif coordination_mode == "broad_autonomy":
+			outcome = _run_broad_autonomy_episode(ctx, slot_map, case, provider)
+		else:
+			raise ValueError(f"Unknown coordination_mode: {coordination_mode!r}")
 
-		previous_role = None
-		completed_all_stages = True
-
-		for role_name, agent_key, handoff_fn in _SPECIALIST_SEQUENCE:
-			agent_template_name = agent_templates[agent_key]
-			agent = frappe.get_doc("EORL Agent Template", agent_template_name)
-
-			try:
-				handoff = handoff_fn(routine_state)
-			except KeyError as exc:
-				outcome["failure_reason"] = f"cannot hand off to {role_name}: missing {exc} from prior stage"
-				completed_all_stages = False
-				break
-
-			if previous_role is not None:
-				_handoff(ctx, previous_role, role_name, {"handoff": handoff})
-
-			retrieved_memory = _retrieve_memory(ctx, agent, run.name)
-			stage_scratch, stage_success, stage_failure_reason = _run_actor_turn(
-				ctx, agent, provider, case, handoff, memory=retrieved_memory
-			)
-			_write_memory(ctx, agent, run.name, episode.name, case, stage_scratch, stage_success)
-
-			routine_state.update(stage_scratch)
-			outcome["stage_results"][role_name] = stage_scratch
-
-			if not stage_success:
-				outcome["failure_reason"] = stage_failure_reason
-				completed_all_stages = False
-				break
-
-			previous_role = role_name
-
-		outcome["success"] = completed_all_stages
-		outcome["purchase_order"] = routine_state.get("purchase_order")
-		outcome["purchase_receipt"] = routine_state.get("purchase_receipt")
-		outcome["purchase_invoice"] = routine_state.get("purchase_invoice")
-		outcome["payment_entry"] = routine_state.get("payment_entry")
+		outcome["episode_number"] = episode_number
 
 		episode.status = "completed" if outcome["success"] else "failed"
 		episode.success = 1 if outcome["success"] else 0
@@ -473,10 +534,76 @@ def run_specialist_routine(agent_templates: dict, seed: int = 42, episode_count:
 	run.event_count = frappe.db.count("EORL Event", {"run": run.name})
 	run.save(ignore_permissions=True)
 
-	last_outcome = episode_outcomes[-1] if episode_outcomes else {"success": False}
+	return episode_outcomes
 
+
+def _phase_for_episode(episode_number: int, regime_shift: Optional[dict]) -> str:
+	if regime_shift and episode_number >= regime_shift.get("trigger_episode", float("inf")):
+		return "shock"
+	return "stable" if episode_number > 1 else "warmup"
+
+
+def run_architecture(
+	architecture_name: str,
+	seed: int = 42,
+	episode_count: int = 1,
+	regime_shift: Optional[str] = None,
+) -> dict:
+	"""Milestone 5's config-driven entrypoint (spec section 26: "Add...
+	architecture selection through config only"). Reads an EORL
+	Architecture document's `coordination_mode` and `actor_slots` to
+	decide HOW the routine runs -- the caller never names a Python
+	function per architecture. An optional EORL Regime Shift (by name)
+	changes environmental parameters starting at its trigger_episode,
+	hidden from agents (spec section 2.4); the same seed given to two
+	different architectures produces the byte-identical scenario stream
+	per episode (spec section 18's paired seeds), since `generate_case`
+	is a pure function of (seed, episode, regime_shift) independent of
+	which architecture calls it."""
+
+	architecture = frappe.get_doc("EORL Architecture", architecture_name)
+	slot_map = {row.slot_id: row.agent_template for row in architecture.actor_slots}
+
+	regime_shift_payload = None
+	if regime_shift:
+		shift_doc = frappe.get_doc("EORL Regime Shift", regime_shift)
+		regime_shift_payload = {
+			"trigger_episode": shift_doc.trigger_episode,
+			"parameter_delta_json": frappe.parse_json(shift_doc.parameter_delta_json or "{}"),
+		}
+
+	run = frappe.get_doc(
+		{
+			"doctype": "EORL Run",
+			"run_seed": seed,
+			"status": "running",
+			"started_at": now_datetime(),
+			"frappe_version": frappe.__version__,
+			"architecture_snapshot_json": frappe.as_json(architecture.as_dict()),
+			"agent_snapshots_json": frappe.as_json(_snapshot_agent_templates(slot_map)),
+			"regime_shift_snapshot_json": frappe.as_json(regime_shift_payload) if regime_shift_payload else None,
+		}
+	).insert(ignore_permissions=True)
+
+	ctx = ExperimentContext(run_id=run.name)
+	emit_event(
+		ctx, "run_initialized",
+		payload={
+			"run": run.name, "seed": seed, "architecture": architecture.name,
+			"coordination_mode": architecture.coordination_mode, "slot_map": slot_map,
+			"episode_count": episode_count, "regime_shift": regime_shift,
+		},
+	)
+
+	episode_outcomes = _run_episode_loop(
+		ctx, run, slot_map, seed, episode_count, architecture.coordination_mode, regime_shift_payload
+	)
+
+	last_outcome = episode_outcomes[-1] if episode_outcomes else {"success": False}
 	return {
 		"run": run.name,
+		"architecture": architecture.name,
+		"coordination_mode": architecture.coordination_mode,
 		"episodes": episode_outcomes,
 		"outcome": last_outcome,
 		"event_count": run.event_count,

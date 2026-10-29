@@ -1,17 +1,12 @@
 import hashlib
 import json
+from typing import Optional
 
 # Fixed against the real restored master data (Hoosier Ice Cream / MILK-001 /
 # Bloomington Dairy, Indiana Foods Inc, ...) so the vertical slice is provable
 # against this site today. The full seed-driven distributional generator
 # (spec section 11 -- demand/lead-time/quality distributions, exception
-# families, regime shifts) is deferred to the Scenario Studio milestone.
-# Milestone 4 deviation from a "full" generator: only quantity varies
-# deterministically per episode (seed, episode) -> qty; item/company/
-# warehouse/suppliers stay fixed to known-good master data so repeated
-# episodes are provably reproducible without depending on unverified
-# item-supplier links for items other than MILK-001. Exceptions/regime
-# shifts arrive with the Scenario Studio + regime-shift milestone.
+# families) is deferred to the Scenario Studio milestone.
 BASE_CASE = {
 	"item_code": "MILK-001",
 	"company": "Hoosier Ice Cream",
@@ -29,16 +24,35 @@ QTY_BASE = 500
 QTY_CYCLE = 6  # qty cycles through QTY_BASE + {0, 50, 100, 150, 200, 250}
 
 
-def generate_case(seed: int = 42, episode: int = 1) -> dict:
-	"""Deterministic given (seed, episode): same inputs always produce the
-	same case, including its hash, so paired-seed replication (spec
-	section 18) is already possible even before the full generator
-	exists."""
+def generate_case(seed: int = 42, episode: int = 1, regime_shift: Optional[dict] = None) -> dict:
+	"""Deterministic given (seed, episode, regime_shift): same inputs
+	always produce the same case, including its hash -- this is what
+	makes paired seeds (spec section 18) and the regime shift (section
+	2.4) both possible without agents ever being told anything changed.
+
+	`regime_shift` is a plain dict shaped like EORL Regime Shift's own
+	fields ({"trigger_episode": int, "parameter_delta_json": {...}}), not
+	a Frappe document, so this stays a pure function callable from tests
+	without a site. Milestone 5 deviation: the only parameter_delta key
+	currently read is "qty_multiplier" (a demand shock, spec section
+	11's demand_distribution concept) -- supplier-reliability-reversal
+	and exception-family shifts arrive with the full Scenario Studio
+	generator. The shift is never written into the returned case as a
+	flag agents could see; it only changes the ordinary `qty` value they
+	already receive every episode (hidden_from_agents, spec section 2.4)."""
+
 	case = dict(BASE_CASE)
 	case["case_id"] = f"CASE-{seed:04d}-{episode:04d}"
 	case["episode"] = episode
 	case["seed"] = seed
-	case["qty"] = QTY_BASE + QTY_STEP * ((seed + episode) % QTY_CYCLE)
+
+	qty_multiplier = 1.0
+	if regime_shift and episode >= regime_shift.get("trigger_episode", float("inf")):
+		delta = regime_shift.get("parameter_delta_json") or regime_shift.get("parameter_delta") or {}
+		qty_multiplier = delta.get("qty_multiplier", 1.0)
+
+	base_qty = QTY_BASE + QTY_STEP * ((seed + episode) % QTY_CYCLE)
+	case["qty"] = round(base_qty * qty_multiplier)
 
 	case_hash = hashlib.sha256(json.dumps(case, sort_keys=True).encode("utf-8")).hexdigest()
 	case["case_hash"] = case_hash

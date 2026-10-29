@@ -1,0 +1,47 @@
+{
+ "doctype": "DocType",
+ "name": "EORL Architecture",
+ "module": "EORL Lab",
+ "custom": 0,
+ "istable": 0,
+ "autoname": "field:architecture_name",
+ "track_changes": 1,
+ "field_order": [
+  "architecture_name",
+  "description",
+  "coordination_mode",
+  "central_coordinator_slot",
+  "actor_slots",
+  "section_graphs",
+  "supervision_edges_json",
+  "communication_edges_json",
+  "workflow_handoff_rules_json",
+  "decision_right_assignments_json",
+  "shared_memory_assignment_json",
+  "allowed_cross_stage_actions_json",
+  "escalation_graph_json",
+  "approval_graph_json"
+ ],
+ "fields": [
+  {"fieldname": "architecture_name", "fieldtype": "Data", "label": "Architecture Name", "reqd": 1, "unique": 1},
+  {"fieldname": "description", "fieldtype": "Small Text", "label": "Description"},
+  {"fieldname": "coordination_mode", "fieldtype": "Select", "label": "Coordination Mode", "options": "specialist_handoff\nbroad_autonomy", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "central_coordinator_slot", "fieldtype": "Data", "label": "Central Coordinator Slot"},
+  {"fieldname": "actor_slots", "fieldtype": "Table", "label": "Actor Slots", "options": "EORL Architecture Actor Slot"},
+  {"fieldname": "section_graphs", "fieldtype": "Section Break", "label": "Structural Graphs", "collapsible": 1, "description": "Deliberately stored as plain JSON for now. These become editable node-edge graphs with the Architecture Designer (a later milestone); the orchestrator does not read them yet beyond coordination_mode and actor_slots -- this is this milestone's scoped deviation, not an oversight."},
+  {"fieldname": "supervision_edges_json", "fieldtype": "Code", "label": "Supervision Edges (JSON)", "options": "JSON"},
+  {"fieldname": "communication_edges_json", "fieldtype": "Code", "label": "Communication Edges (JSON)", "options": "JSON"},
+  {"fieldname": "workflow_handoff_rules_json", "fieldtype": "Code", "label": "Workflow Handoff Rules (JSON)", "options": "JSON"},
+  {"fieldname": "decision_right_assignments_json", "fieldtype": "Code", "label": "Decision-Right Assignments (JSON)", "options": "JSON"},
+  {"fieldname": "shared_memory_assignment_json", "fieldtype": "Code", "label": "Shared-Memory Assignment (JSON)", "options": "JSON"},
+  {"fieldname": "allowed_cross_stage_actions_json", "fieldtype": "Code", "label": "Allowed Cross-Stage Actions (JSON)", "options": "JSON"},
+  {"fieldname": "escalation_graph_json", "fieldtype": "Code", "label": "Escalation Graph (JSON)", "options": "JSON"},
+  {"fieldname": "approval_graph_json", "fieldtype": "Code", "label": "Approval Graph (JSON)", "options": "JSON"}
+ ],
+ "permissions": [
+  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
+  {"role": "EORL Administrator", "read": 1, "write": 1, "create": 1, "delete": 1},
+  {"role": "EORL Researcher", "read": 1, "write": 1, "create": 1, "delete": 0},
+  {"role": "EORL Viewer", "read": 1}
+ ]
+}

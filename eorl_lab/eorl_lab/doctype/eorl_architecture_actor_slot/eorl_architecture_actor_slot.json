@@ -1,0 +1,15 @@
+{
+ "doctype": "DocType",
+ "name": "EORL Architecture Actor Slot",
+ "module": "EORL Lab",
+ "custom": 0,
+ "istable": 1,
+ "editable_grid": 1,
+ "field_order": ["slot_id", "agent_template", "count"],
+ "fields": [
+  {"fieldname": "slot_id", "fieldtype": "Data", "label": "Slot ID", "reqd": 1, "in_list_view": 1, "description": "Stable key the orchestrator's coordination_mode handler looks up, e.g. 'purchasing_agent' or 'general_purchasing_agent'."},
+  {"fieldname": "agent_template", "fieldtype": "Link", "label": "Agent Template", "options": "EORL Agent Template", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "count", "fieldtype": "Int", "label": "Count", "default": "1", "in_list_view": 1}
+ ],
+ "permissions": []
+}

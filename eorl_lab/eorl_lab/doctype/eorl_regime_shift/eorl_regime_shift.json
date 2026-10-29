@@ -1,0 +1,33 @@
+{
+ "doctype": "DocType",
+ "name": "EORL Regime Shift",
+ "module": "EORL Lab",
+ "custom": 0,
+ "istable": 0,
+ "autoname": "field:shift_name",
+ "track_changes": 1,
+ "field_order": [
+  "shift_name",
+  "trigger_episode",
+  "shift_type",
+  "hidden_from_agents",
+  "description",
+  "expected_observable_change",
+  "parameter_delta_json"
+ ],
+ "fields": [
+  {"fieldname": "shift_name", "fieldtype": "Data", "label": "Shift Name", "reqd": 1, "unique": 1},
+  {"fieldname": "trigger_episode", "fieldtype": "Int", "label": "Trigger Episode", "reqd": 1, "description": "The shift is in effect starting at this episode number (inclusive) for every subsequent episode in the run."},
+  {"fieldname": "shift_type", "fieldtype": "Select", "label": "Shift Type", "options": "abrupt\ngradual", "default": "abrupt"},
+  {"fieldname": "hidden_from_agents", "fieldtype": "Check", "label": "Hidden From Agents", "default": "1", "description": "When checked (the default, and the only mode implemented so far), the shift changes environmental parameters only -- agents are never told a shift occurred, per spec section 2.4."},
+  {"fieldname": "description", "fieldtype": "Small Text", "label": "Description"},
+  {"fieldname": "expected_observable_change", "fieldtype": "Small Text", "label": "Expected Observable Change"},
+  {"fieldname": "parameter_delta_json", "fieldtype": "Code", "label": "Parameter Delta (JSON)", "options": "JSON", "description": "Currently only the 'qty_multiplier' key is read by the scenario generator (spec section 11's demand_distribution, concretely a demand shock). Other parameter deltas (supplier reliability reversal, exception-family changes, etc.) arrive with the full Scenario Studio generator."}
+ ],
+ "permissions": [
+  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
+  {"role": "EORL Administrator", "read": 1, "write": 1, "create": 1, "delete": 1},
+  {"role": "EORL Researcher", "read": 1, "write": 1, "create": 1, "delete": 0},
+  {"role": "EORL Viewer", "read": 1}
+ ]
+}
