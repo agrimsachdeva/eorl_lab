@@ -1,0 +1,53 @@
+{
+ "doctype": "DocType",
+ "name": "EORL Tool Policy",
+ "module": "EORL Lab",
+ "custom": 0,
+ "istable": 0,
+ "autoname": "field:policy_name",
+ "track_changes": 1,
+ "field_order": [
+  "policy_name",
+  "allowed_semantic_tools",
+  "section_scopes",
+  "allowed_read_scopes",
+  "allowed_write_scopes",
+  "allowed_docstatus_transitions",
+  "section_rights",
+  "may_submit_documents",
+  "may_cancel_documents",
+  "may_approve",
+  "may_request_approval",
+  "may_message_agents",
+  "allowed_message_targets",
+  "section_limits",
+  "max_tool_calls_per_step",
+  "max_write_actions_per_episode",
+  "escalation_policy"
+ ],
+ "fields": [
+  {"fieldname": "policy_name", "fieldtype": "Data", "label": "Policy Name", "reqd": 1, "unique": 1},
+  {"fieldname": "allowed_semantic_tools", "fieldtype": "Table", "label": "Allowed Semantic Tools", "options": "EORL Allowed Tool"},
+  {"fieldname": "section_scopes", "fieldtype": "Section Break", "label": "Scopes"},
+  {"fieldname": "allowed_read_scopes", "fieldtype": "Small Text", "label": "Allowed Read Scopes"},
+  {"fieldname": "allowed_write_scopes", "fieldtype": "Small Text", "label": "Allowed Write Scopes"},
+  {"fieldname": "allowed_docstatus_transitions", "fieldtype": "Small Text", "label": "Allowed Docstatus Transitions"},
+  {"fieldname": "section_rights", "fieldtype": "Section Break", "label": "Rights"},
+  {"fieldname": "may_submit_documents", "fieldtype": "Check", "label": "May Submit Documents"},
+  {"fieldname": "may_cancel_documents", "fieldtype": "Check", "label": "May Cancel Documents"},
+  {"fieldname": "may_approve", "fieldtype": "Check", "label": "May Approve"},
+  {"fieldname": "may_request_approval", "fieldtype": "Check", "label": "May Request Approval"},
+  {"fieldname": "may_message_agents", "fieldtype": "Check", "label": "May Message Agents"},
+  {"fieldname": "allowed_message_targets", "fieldtype": "Small Text", "label": "Allowed Message Targets"},
+  {"fieldname": "section_limits", "fieldtype": "Section Break", "label": "Limits"},
+  {"fieldname": "max_tool_calls_per_step", "fieldtype": "Int", "label": "Max Tool Calls Per Step"},
+  {"fieldname": "max_write_actions_per_episode", "fieldtype": "Int", "label": "Max Write Actions Per Episode"},
+  {"fieldname": "escalation_policy", "fieldtype": "Small Text", "label": "Escalation Policy"}
+ ],
+ "permissions": [
+  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
+  {"role": "EORL Administrator", "read": 1, "write": 1, "create": 1, "delete": 1},
+  {"role": "EORL Researcher", "read": 1, "write": 1, "create": 1, "delete": 0},
+  {"role": "EORL Viewer", "read": 1}
+ ]
+}

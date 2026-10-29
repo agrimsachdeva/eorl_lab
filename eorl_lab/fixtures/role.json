@@ -1,0 +1,23 @@
+[
+ {
+  "doctype": "Role",
+  "name": "EORL Researcher",
+  "role_name": "EORL Researcher",
+  "desk_access": 1,
+  "disabled": 0
+ },
+ {
+  "doctype": "Role",
+  "name": "EORL Administrator",
+  "role_name": "EORL Administrator",
+  "desk_access": 1,
+  "disabled": 0
+ },
+ {
+  "doctype": "Role",
+  "name": "EORL Viewer",
+  "role_name": "EORL Viewer",
+  "desk_access": 1,
+  "disabled": 0
+ }
+]

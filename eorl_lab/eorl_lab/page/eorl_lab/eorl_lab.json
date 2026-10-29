@@ -1,0 +1,15 @@
+{
+ "doctype": "Page",
+ "module": "EORL Lab",
+ "name": "eorl-lab",
+ "page_name": "eorl-lab",
+ "title": "EORL Lab",
+ "standard": "Yes",
+ "system_page": 0,
+ "roles": [
+  {"role": "System Manager"},
+  {"role": "EORL Administrator"},
+  {"role": "EORL Researcher"},
+  {"role": "EORL Viewer"}
+ ]
+}

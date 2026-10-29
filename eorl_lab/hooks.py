@@ -213,3 +213,9 @@ app_license = "mit"
 # auth_hooks = [
 # 	"eorl_lab.auth.validate"
 # ]
+
+# Fixtures
+# --------
+fixtures = [
+	{"doctype": "Role", "filters": [["name", "in", ["EORL Researcher", "EORL Administrator", "EORL Viewer"]]]},
+]
