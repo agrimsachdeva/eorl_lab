@@ -1,0 +1,23 @@
+{
+ "doctype": "DocType",
+ "name": "EORL Branch",
+ "module": "EORL Lab",
+ "custom": 0,
+ "istable": 0,
+ "autoname": "hash",
+ "track_changes": 1,
+ "field_order": ["parent_run", "source_episode", "child_run", "intervention_description", "created_at"],
+ "fields": [
+  {"fieldname": "parent_run", "fieldtype": "Link", "label": "Parent Run", "options": "EORL Run", "reqd": 1, "in_list_view": 1, "search_index": 1},
+  {"fieldname": "source_episode", "fieldtype": "Int", "label": "Source Episode", "reqd": 1, "in_list_view": 1, "description": "The parent run's episode number this branch diverged from. Episodes 1..source_episode are shared, identical history (spec V2 section 17: 'History_A[1:t] == History_B[1:t]')."},
+  {"fieldname": "child_run", "fieldtype": "Link", "label": "Child Run", "options": "EORL Run", "reqd": 1, "in_list_view": 1, "search_index": 1},
+  {"fieldname": "intervention_description", "fieldtype": "Small Text", "label": "Intervention Description", "description": "What changed after the branch point (e.g. 'switched from specialist_handoff to broad_autonomy architecture')."},
+  {"fieldname": "created_at", "fieldtype": "Datetime", "label": "Created At"}
+ ],
+ "permissions": [
+  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
+  {"role": "EORL Administrator", "read": 1, "write": 1, "create": 1, "delete": 1},
+  {"role": "EORL Researcher", "read": 1, "write": 1, "create": 1, "delete": 0},
+  {"role": "EORL Viewer", "read": 1}
+ ]
+}

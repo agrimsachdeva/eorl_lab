@@ -42,6 +42,19 @@ def _choose_supplier(case, scratch, memory):
 	return supplier, basis, assessment
 
 
+def _supplier_rate(case, supplier):
+	"""The chosen supplier's ground-truth unit price, passed explicitly
+	into create_purchase_order rather than left for ERPNext's own
+	Item Price / last_purchase_rate fallback chain to resolve. That
+	fallback is fragile and self-referential (last_purchase_rate is
+	itself set FROM each submitted transaction's rate), so once any one
+	transaction resolves to 0 it silently corrupts every later run on
+	this shared site. Ground truth is the actual source of the price in
+	this scenario, so read it directly."""
+	ground_truth = (case.get("latent_ground_truth") or {}).get(supplier) or {}
+	return ground_truth.get("price")
+
+
 def _decide_receipt_quality_steps(scratch):
 	"""SOTA Milestone 1 (V2 sections 13/15): shared by the specialist
 	Warehouse Agent and the broad-autonomy General Purchasing Agent --
@@ -144,6 +157,7 @@ class DeterministicProvider(ModelProvider):
 				"qty": case["qty"],
 				"company": case["company"],
 				"warehouse": case["warehouse"],
+				"rate": _supplier_rate(case, supplier),
 			},
 			stop=True,
 			basis=basis,
@@ -282,6 +296,7 @@ class DeterministicProvider(ModelProvider):
 					"qty": case["qty"],
 					"company": case["company"],
 					"warehouse": case["warehouse"],
+					"rate": _supplier_rate(case, supplier),
 				},
 				stop=False,
 				basis=basis,

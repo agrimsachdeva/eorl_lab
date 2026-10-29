@@ -566,16 +566,20 @@ def _run_episode_loop(
 	coordination_mode: str,
 	regime_shift: Optional[dict],
 	communication_policy: Optional[str] = None,
+	start_episode: int = 1,
 ) -> list:
 	"""Shared multi-episode driver for both coordination modes. A failed
 	episode halts the run (spec section 13: a failure state, not a
-	silently-skipped one)."""
+	silently-skipped one). `start_episode` (SOTA Milestone 2) lets a
+	branched run continue episode numbering from where its parent left
+	off (branch_point_episode + 1) instead of always restarting at 1 --
+	see branch_run() below."""
 	episode_outcomes = []
 	run_success = True
 	run_failure_reason = None
 	provider = DeterministicProvider()
 
-	for episode_number in range(1, episode_count + 1):
+	for episode_number in range(start_episode, start_episode + episode_count):
 		episode = frappe.get_doc(
 			{
 				"doctype": "EORL Episode",
@@ -713,4 +717,204 @@ def run_architecture(
 		"episodes": episode_outcomes,
 		"outcome": last_outcome,
 		"event_count": run.event_count,
+	}
+
+
+def _clone_memory_through_branch_point(source_run_name: str, target_run_name: str, branch_episode: int) -> int:
+	"""SOTA Milestone 2 (V2 section 17: clone actor memories at the
+	branch point). Copies every EORL Memory Record written during the
+	source run's episodes 1..branch_episode into the new target run, so
+	the branch's actors start with the SAME accumulated memory the
+	parent had at that point. The copied records still reference the
+	ORIGINAL (parent-owned) episode documents -- episodes are never
+	duplicated, only referenced -- consistent with
+	get_full_branch_history()'s lineage-walk rather than data-copy
+	approach to reconstructing pre-branch history."""
+	episode_names = frappe.get_all(
+		"EORL Episode",
+		filters={"run": source_run_name, "episode_number": ["<=", branch_episode]},
+		pluck="name",
+	)
+	if not episode_names:
+		return 0
+
+	records = frappe.get_all(
+		"EORL Memory Record",
+		filters={"run": source_run_name, "episode": ["in", episode_names]},
+		fields=["episode", "actor", "domain", "case_summary", "action", "outcome", "success", "salience", "payload_json"],
+	)
+	for record in records:
+		frappe.get_doc(
+			{
+				"doctype": "EORL Memory Record",
+				"run": target_run_name,
+				"episode": record.episode,
+				"actor": record.actor,
+				"domain": record.domain,
+				"case_summary": record.case_summary,
+				"action": record.action,
+				"outcome": record.outcome,
+				"success": record.success,
+				"salience": record.salience,
+				"payload_json": record.payload_json,
+				"created_at": now_datetime(),
+			}
+		).insert(ignore_permissions=True)
+
+	return len(records)
+
+
+def get_full_branch_history(run_name: str) -> list:
+	"""Reconstructs ONE continuous episode history for `run_name` by
+	walking its parent_run/branch_point_episode lineage back to the
+	root, then reading each ancestor's own episodes up to the point
+	where the NEXT descendant diverged from it (spec section 17's
+	requirement that "History_A[1:t] == History_B[1:t]" for two
+	branches sharing a common ancestor through episode t). Pre-branch
+	episodes are read from whichever run actually owns them -- never
+	duplicated into `run_name`'s own episode list."""
+	chain = [(run_name, None)]  # (run_name, episode_upper_bound); None = no cap (this run's own episodes)
+	current = frappe.get_doc("EORL Run", run_name)
+	while current.parent_run:
+		chain.append((current.parent_run, current.branch_point_episode))
+		current = frappe.get_doc("EORL Run", current.parent_run)
+	chain.reverse()  # root first, run_name itself last
+
+	history = []
+	for ancestor_run, upper_bound in chain:
+		episodes = frappe.get_all(
+			"EORL Episode",
+			filters={"run": ancestor_run},
+			fields=["run", "name", "episode_number", "scenario_case_id", "phase", "success"],
+			order_by="episode_number asc",
+		)
+		for ep in episodes:
+			if upper_bound is not None and ep.episode_number > upper_bound:
+				continue
+			history.append(ep)
+	return history
+
+
+def branch_run(
+	source_run_name: str,
+	branch_episode: int,
+	additional_episode_count: int = 1,
+	architecture_name: Optional[str] = None,
+	regime_shift: Optional[str] = None,
+	intervention_description: str = "",
+) -> dict:
+	"""SOTA Milestone 2 (V2 section 17, the flagship counterfactual-
+	branching capability). Clones actor memory accumulated through
+	`branch_episode`, then launches a brand-new run that continues the
+	SAME exogenous scenario stream (same seed) from episode
+	branch_episode + 1 onward -- optionally under a DIFFERENT
+	architecture or regime shift (the counterfactual intervention).
+	Episodes 1..branch_episode are never duplicated or modified; they
+	stay owned by the source run. Call get_full_branch_history() to
+	reconstruct one continuous history across the branch point.
+
+	Honest scope, stated plainly rather than overclaimed: ERP state
+	itself is NOT cloned or forked. Every branch's post-branch-point
+	tool calls create real, permanent ERPNext documents in the SAME
+	shared company -- there is no per-branch isolated universe at the
+	ERP layer (that would need per-branch site clones, V2 section 20's
+	"scalable strategy", not built). Comparisons based on process/event
+	data (paths, coherence, variety, actor continuity) are valid across
+	branches since they derive purely from each branch's own events;
+	comparisons that depend on absolute shared ERP aggregates (e.g.
+	"current stock level") are NOT, since multiple branches mutate the
+	same underlying ledger. See SOTA_ROADMAP.md."""
+
+	source_run = frappe.get_doc("EORL Run", source_run_name)
+	if (source_run.current_episode or 0) < branch_episode:
+		frappe.throw(
+			f"Cannot branch {source_run_name} at episode {branch_episode}: "
+			f"it has only completed {source_run.current_episode or 0} episode(s)."
+		)
+
+	source_architecture_snapshot = frappe.parse_json(source_run.architecture_snapshot_json or "{}")
+	target_architecture_name = architecture_name or source_architecture_snapshot.get("name")
+	if not target_architecture_name:
+		frappe.throw(
+			f"Cannot branch {source_run_name}: no architecture_name given and the source run carries "
+			"no architecture name in its own snapshot (it wasn't launched via run_architecture)."
+		)
+
+	architecture = frappe.get_doc("EORL Architecture", target_architecture_name)
+	slot_map = {row.slot_id: row.agent_template for row in architecture.actor_slots}
+
+	regime_shift_payload = None
+	if regime_shift:
+		shift_doc = frappe.get_doc("EORL Regime Shift", regime_shift)
+		regime_shift_payload = {
+			"name": shift_doc.name,
+			"trigger_episode": shift_doc.trigger_episode,
+			"parameter_delta_json": frappe.parse_json(shift_doc.parameter_delta_json or "{}"),
+		}
+
+	branch_run_doc = frappe.get_doc(
+		{
+			"doctype": "EORL Run",
+			"run_seed": source_run.run_seed,  # identical exogenous stream -- non-negotiable
+			"status": "running",
+			"started_at": now_datetime(),
+			"frappe_version": frappe.__version__,
+			"parent_run": source_run_name,
+			"branch_point_episode": branch_episode,
+			"architecture_snapshot_json": frappe.as_json(architecture.as_dict()),
+			"agent_snapshots_json": frappe.as_json(_snapshot_agent_templates(slot_map)),
+			"regime_shift_snapshot_json": frappe.as_json(regime_shift_payload) if regime_shift_payload else None,
+		}
+	).insert(ignore_permissions=True)
+
+	ctx = ExperimentContext(run_id=branch_run_doc.name)
+	emit_event(
+		ctx, "run_branched",
+		payload={
+			"parent_run": source_run_name,
+			"branch_point_episode": branch_episode,
+			"architecture": architecture.name,
+			"intervention_description": intervention_description,
+		},
+	)
+	emit_event(
+		ctx, "run_initialized",
+		payload={
+			"run": branch_run_doc.name, "seed": source_run.run_seed, "architecture": architecture.name,
+			"coordination_mode": architecture.coordination_mode, "slot_map": slot_map,
+			"episode_count": additional_episode_count, "regime_shift": regime_shift,
+			"communication_policy": architecture.communication_policy, "branched_from": source_run_name,
+		},
+	)
+
+	cloned_memory_count = _clone_memory_through_branch_point(source_run_name, branch_run_doc.name, branch_episode)
+
+	episode_outcomes = _run_episode_loop(
+		ctx, branch_run_doc, slot_map, source_run.run_seed, additional_episode_count,
+		architecture.coordination_mode, regime_shift_payload,
+		communication_policy=architecture.communication_policy,
+		start_episode=branch_episode + 1,
+	)
+
+	frappe.get_doc(
+		{
+			"doctype": "EORL Branch",
+			"parent_run": source_run_name,
+			"source_episode": branch_episode,
+			"child_run": branch_run_doc.name,
+			"intervention_description": intervention_description,
+			"created_at": now_datetime(),
+		}
+	).insert(ignore_permissions=True)
+
+	last_outcome = episode_outcomes[-1] if episode_outcomes else {"success": False}
+	return {
+		"parent_run": source_run_name,
+		"branch_run": branch_run_doc.name,
+		"branch_point_episode": branch_episode,
+		"architecture": architecture.name,
+		"cloned_memory_count": cloned_memory_count,
+		"episodes": episode_outcomes,
+		"outcome": last_outcome,
+		"event_count": branch_run_doc.event_count,
 	}

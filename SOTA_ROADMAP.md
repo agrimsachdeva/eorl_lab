@@ -1,7 +1,7 @@
 # EORL SOTA Roadmap
 
-**Status:** SOTA Milestone 1 delivered. Created 2026-10-29, updated 2026-10-29
-(SOTA M1).
+**Status:** SOTA Milestone 2 delivered. Created 2026-10-29, updated 2026-10-29
+(SOTA M2).
 
 This tracks progress against `docs/specs/EORL_SOTA_DEVELOPER_BUILD_SPEC_V2_ANALYTICS.md`
 ("V2"), a substantially larger specification than the one `PROGRESS.md`
@@ -250,11 +250,96 @@ analytics workbench). Delivered:
 
 ---
 
-## 6. Next: SOTA Milestone 2 (counterfactual branching) or beyond
+## 6. SOTA Milestone 2 — Delivered
 
-SOTA Milestone 1 closed the structural gaps that blocked everything
-downstream. The roadmap in section 4 above still applies for what comes
-next (counterfactual branching → memory expansion/real LLM provider →
-Construct Registry/Experiment Builder expansion → analytics workbench
-phase 1). Confirm before continuing further, same as before starting
-Milestone 1.
+Counterfactual branching (V2 §17, §31.5's acceptance test): clone a run's
+state at episode `t`, launch diverging conditions that share identical
+history up to that point.
+
+- **`branch_run(source_run_name, branch_episode, ...)`**
+  (`eorl_lab.runtime.orchestrator`): validates the source run actually
+  reached `branch_episode`, clones actor memory accumulated through that
+  episode (`_clone_memory_through_branch_point` — copies `EORL Memory
+  Record` rows into the new run; episodes themselves are never
+  duplicated, only referenced), then creates a new `EORL Run` with
+  `parent_run`/`branch_point_episode` set and continues the **same
+  exogenous scenario stream** (identical `run_seed`) from
+  `branch_point_episode + 1` onward — optionally under a *different*
+  `EORL Architecture` or `EORL Regime Shift` (the actual counterfactual
+  intervention). A new `EORL Branch` DocType records the lineage edge
+  (`parent_run`, `source_episode`, `child_run`,
+  `intervention_description`); a `run_branched` event is emitted on the
+  child. Whitelisted via `eorl_lab.api.runs.branch_run`.
+- **`get_full_branch_history(run_name)`**: walks a run's
+  `parent_run`/`branch_point_episode` chain back to the root and
+  reconstructs *one* continuous episode history by reading each
+  ancestor's own episodes up to the point the next descendant diverged
+  from it — the data itself is never copied between runs, only the
+  read path changes. Whitelisted via `eorl_lab.api.runs
+  .get_branch_history`.
+- **`_run_episode_loop` gained `start_episode`** so a branch's episode
+  numbering continues from where its parent left off instead of
+  restarting at 1, matching how a human would read "episode 3 of this
+  branch" as a continuation, not a new run.
+- **Live-verified acceptance test (V2 §31.5):** ran a real 2-episode
+  parent (`RUN-00072`, seed 555, broad_autonomy), then branched it twice
+  at episode 2 — once continuing broad_autonomy (`RUN-00073`), once
+  switching to specialist_handoff (`RUN-00074`). `get_full_branch_history`
+  on both children returned **byte-identical episode 1–2 records**
+  (same `run`, same episode `name`, same `scenario_case_id`) for both,
+  then **diverged from episode 3 onward** (distinct episode names, owned
+  by the respective child run) — both the shared-history and the
+  divergence halves of the acceptance test hold. The two `EORL Branch`
+  lineage records and the `run_branched` events were both created
+  correctly. 6 new tests (`test_eorl_counterfactual_branching.py`) cover
+  this plus: branching before the source run reached that episode raises
+  (`frappe.ValidationError`); an unbranched run's history is just its own
+  episodes; memory records are cloned byte-for-byte through the branch
+  point (content-compared, not just counted); lineage fields persist on
+  the child `EORL Run` document and the `EORL Branch` record. 52/52
+  tests pass (46 existing + 6 new).
+- **Pre-existing bug found and fixed in the process, unrelated to
+  branching but blocking every run on this shared dev site once
+  triggered:** `DeterministicProvider` never passed an explicit `rate`
+  to `create_purchase_order`, relying entirely on ERPNext's own Item
+  Price → `last_purchase_rate` fallback chain. That chain is
+  self-referential — `last_purchase_rate` is itself set *from* each
+  submitted transaction's own rate — so once any single transaction
+  resolved to a rate of 0 (which happened during this milestone's own
+  testing), every subsequent run on the site silently inherited rate 0
+  forever, failing downstream at Payment Entry ("Paid Amount is
+  mandatory"). Fixed by having both `_decide_purchasing_agent` and
+  `_decide_general_purchasing_agent` pass the chosen supplier's actual
+  `latent_ground_truth[supplier]["price"]` as an explicit `rate` (new
+  `_supplier_rate` helper in `providers/deterministic.py`), breaking the
+  circular dependency for good, and repaired the already-corrupted
+  `Item.last_purchase_rate` master-data value on the live site.
+- **Honest scope, stated plainly (also in the `branch_run` docstring):
+  ERP state itself is NOT forked per branch.** Every branch's post-branch
+  tool calls create real, permanent ERPNext documents in the SAME shared
+  company — there is no per-branch isolated universe at the ERP layer
+  (V2 §20's "scalable strategy" of per-branch site clones is not built).
+  Verified directly: two branches of the same parent each create their
+  own, distinct Purchase Order, but both reference the same shared
+  `company`. Process/event-derived comparisons (paths, coherence,
+  variety, actor continuity) are valid across branches since they derive
+  purely from each branch's own events; comparisons against absolute
+  shared ERP aggregates (e.g. "current stock level") are **not**, since
+  multiple branches mutate the same underlying ledger concurrently.
+- **Deviation:** `branch_run` requires the source run to already have an
+  architecture name recoverable from its own snapshot (i.e. it was
+  launched via `run_architecture`/`launch_pilot`, not `run_demo_episode`
+  or `run_specialist_routine`) unless `architecture_name` is given
+  explicitly — acceptable since every real experimental run goes through
+  `run_architecture`.
+
+---
+
+## 7. Next: SOTA Milestone 3 (memory expansion + real LLM provider) or beyond
+
+SOTA Milestones 1 and 2 closed the structural gaps and delivered
+counterfactual branching. The roadmap in section 4 above still applies
+for what comes next (memory expansion/real LLM provider → Construct
+Registry/Experiment Builder expansion → analytics workbench phase 1).
+Confirm before continuing further, same as before starting Milestones 1
+and 2.

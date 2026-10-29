@@ -1,6 +1,7 @@
 import frappe
 
-from eorl_lab.runtime.orchestrator import run_demo_episode
+from eorl_lab.runtime.orchestrator import branch_run as _branch_run
+from eorl_lab.runtime.orchestrator import get_full_branch_history, run_demo_episode
 
 
 @frappe.whitelist()
@@ -36,3 +37,37 @@ def get_run_detail(run: str) -> dict:
 		order_by="episode_number asc",
 	)
 	return {"run": run_doc.as_dict(), "episodes": episodes}
+
+
+@frappe.whitelist()
+def branch_run(
+	source_run_name: str,
+	branch_episode: int,
+	additional_episode_count: int = 1,
+	architecture_name: str = None,
+	regime_shift: str = None,
+	intervention_description: str = "",
+) -> dict:
+	"""SOTA Milestone 2 (V2 section 17): counterfactual branching. Clones
+	actor memory accumulated through `branch_episode` and continues the
+	same scenario stream under a (possibly different) architecture or
+	regime shift. See eorl_lab.runtime.orchestrator.branch_run for the
+	full honest-scope caveats (ERP state itself is not forked)."""
+	frappe.only_for(["System Manager", "EORL Administrator", "EORL Researcher"])
+	return _branch_run(
+		source_run_name,
+		int(branch_episode),
+		additional_episode_count=int(additional_episode_count),
+		architecture_name=architecture_name,
+		regime_shift=regime_shift,
+		intervention_description=intervention_description,
+	)
+
+
+@frappe.whitelist()
+def get_branch_history(run: str) -> list:
+	"""Reconstructs one continuous episode history for `run` across its
+	full branch lineage (spec section 17's acceptance test: two branches
+	must share byte-equivalent history through their common branch
+	point)."""
+	return get_full_branch_history(run)
