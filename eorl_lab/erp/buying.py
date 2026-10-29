@@ -105,6 +105,7 @@ def create_purchase_order(
 
 	return {
 		"purchase_order": po.name,
+		"supplier": po.supplier,
 		"docstatus": po.docstatus,
 		"grand_total": po.grand_total,
 		"before_draft_count_for_supplier": before_count,

@@ -18,10 +18,15 @@ class DeterministicProvider(ModelProvider):
 	"""Rule-based provider for tests and reproducible demos (spec section
 	8.1). Milestone 2 scripted one role; Milestone 3 scripts one fixed
 	policy per organizational role in the specialist/handoff architecture
-	(spec section 2.3 Architecture A). Each method reads only `case`,
-	`handoff` (what the previous actor passed forward), and `scratch`
-	(this actor's own accumulated tool results this turn) -- never global
-	ground truth the role isn't entitled to (spec section 8.3)."""
+	(spec section 2.3 Architecture A). Milestone 4 additionally lets the
+	Purchasing Agent condition on its own retrieved memory (spec section
+	14) -- a small, honest demonstration of routinization: once it has
+	successfully ordered from a supplier, it repeats that choice in later
+	episodes rather than re-deriving it from scratch every time. Each
+	method reads only `case`, `handoff` (what the previous actor passed
+	forward), `scratch` (this actor's own accumulated tool results this
+	turn), and `memory` -- never global ground truth the role isn't
+	entitled to (spec section 8.3)."""
 
 	def generate(self, request: ModelRequest) -> ModelResponse:
 		role = request.context.get("organizational_role")
@@ -39,6 +44,7 @@ class DeterministicProvider(ModelProvider):
 	def _decide_purchasing_agent(self, context):
 		case = context["case"]
 		scratch = context["scratch"]
+		memory = context.get("memory") or []
 
 		if "candidate_suppliers" not in scratch:
 			return _decision(
@@ -50,7 +56,24 @@ class DeterministicProvider(ModelProvider):
 			)
 
 		candidates = scratch["candidate_suppliers"] or []
-		supplier = candidates[0] if candidates else None
+
+		remembered_supplier = None
+		for record in memory:  # memory is already ranked most-relevant first by the memory store
+			action = record.get("action") or ""
+			if record.get("success") and action.startswith("ordered_from:"):
+				candidate = action.split("ordered_from:", 1)[1]
+				if candidate in candidates:
+					remembered_supplier = candidate
+					break
+
+		supplier = remembered_supplier or (candidates[0] if candidates else None)
+		if remembered_supplier:
+			basis = "Deterministic policy: repeat a remembered successful supplier choice (routinization)."
+			assessment = f"Recalled a prior successful order from {remembered_supplier}; repeating it."
+		else:
+			basis = "Deterministic policy: act on the first candidate supplier after sensing (no usable memory yet)."
+			assessment = f"Observed {len(candidates)} candidate supplier(s); no prior memory to draw on."
+
 		return _decision(
 			"create_purchase_order",
 			{
@@ -61,8 +84,8 @@ class DeterministicProvider(ModelProvider):
 				"warehouse": case["warehouse"],
 			},
 			stop=True,
-			basis="Deterministic policy: act on the first candidate supplier after sensing.",
-			assessment=f"Observed {len(candidates)} candidate supplier(s).",
+			basis=basis,
+			assessment=assessment,
 		)
 
 	def _decide_purchasing_manager_agent(self, context):

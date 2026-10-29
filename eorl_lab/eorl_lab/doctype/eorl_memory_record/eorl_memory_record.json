@@ -1,0 +1,43 @@
+{
+ "doctype": "DocType",
+ "name": "EORL Memory Record",
+ "module": "EORL Lab",
+ "custom": 0,
+ "istable": 0,
+ "autoname": "hash",
+ "track_changes": 1,
+ "field_order": [
+  "run",
+  "episode",
+  "actor",
+  "domain",
+  "created_at",
+  "section_content",
+  "case_summary",
+  "action",
+  "outcome",
+  "success",
+  "salience",
+  "payload_json"
+ ],
+ "fields": [
+  {"fieldname": "run", "fieldtype": "Link", "label": "Run", "options": "EORL Run", "reqd": 1, "in_list_view": 1, "search_index": 1},
+  {"fieldname": "episode", "fieldtype": "Link", "label": "Episode", "options": "EORL Episode", "in_list_view": 1, "search_index": 1},
+  {"fieldname": "actor", "fieldtype": "Link", "label": "Actor", "options": "EORL Agent Template", "reqd": 1, "in_list_view": 1, "search_index": 1},
+  {"fieldname": "domain", "fieldtype": "Data", "label": "Domain", "in_list_view": 1},
+  {"fieldname": "created_at", "fieldtype": "Datetime", "label": "Created At"},
+  {"fieldname": "section_content", "fieldtype": "Section Break", "label": "Content"},
+  {"fieldname": "case_summary", "fieldtype": "Small Text", "label": "Case Summary"},
+  {"fieldname": "action", "fieldtype": "Small Text", "label": "Action"},
+  {"fieldname": "outcome", "fieldtype": "Small Text", "label": "Outcome"},
+  {"fieldname": "success", "fieldtype": "Check", "label": "Success"},
+  {"fieldname": "salience", "fieldtype": "Float", "label": "Salience", "default": "1.0"},
+  {"fieldname": "payload_json", "fieldtype": "Code", "label": "Payload (JSON)", "options": "JSON"}
+ ],
+ "permissions": [
+  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
+  {"role": "EORL Administrator", "read": 1, "write": 1, "create": 1, "delete": 1},
+  {"role": "EORL Researcher", "read": 1, "write": 1, "create": 1, "delete": 0},
+  {"role": "EORL Viewer", "read": 1}
+ ]
+}
