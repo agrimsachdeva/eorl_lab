@@ -568,6 +568,7 @@ def run_architecture(
 	if regime_shift:
 		shift_doc = frappe.get_doc("EORL Regime Shift", regime_shift)
 		regime_shift_payload = {
+			"name": shift_doc.name,
 			"trigger_episode": shift_doc.trigger_episode,
 			"parameter_delta_json": frappe.parse_json(shift_doc.parameter_delta_json or "{}"),
 		}

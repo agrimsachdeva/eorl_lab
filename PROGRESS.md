@@ -362,9 +362,79 @@ moment it exists, is now built and tested; it has nothing to measure yet.
 
 ---
 
+---
+
+## Milestone 8 — Reproducibility artifact
+
+**Delivered:**
+- `eorl_lab/observability/exporter.py` — builds the full spec section
+  7.9 artifact set as an in-memory zip: `run_manifest.json`,
+  `architecture.json`, `resolved_agent_configs/*.json` (one per actor
+  slot), `scenario_stream.jsonl` (every episode's case, *regenerated*
+  from the recorded seed/regime-shift via the same pure
+  `generate_case()` Milestone 2 built — not read back from storage, so
+  building the bundle doubles as a determinism check), `events.jsonl`
+  (the complete raw event log), `process_paths.csv`, `metrics.csv`,
+  `model_metadata.json` (no API keys), `environment_metadata.json`,
+  `code_commit.txt`, `requirements_lock.txt`, `README_REPRODUCE.md`
+  (templated with this run's actual seed/architecture/commit so the
+  instructions are copy-pasteable, not generic).
+- `eorl_lab/observability/replay.py::reproduce_run(run_name)` — reads
+  an existing run's own recorded seed/architecture/regime-shift back
+  out of its snapshot and `run_initialized` event (never asks the
+  caller to re-supply them), launches a brand-new run through the same
+  `run_architecture()` entrypoint any researcher would use, then
+  verifies reproduction two ways: per-episode scenario **case-hash**
+  equality (not just matching IDs, which are string-formatted from the
+  inputs and would trivially "match" without proving anything) and
+  exact numeric equality across every computed metric.
+- `eorl_lab/api/exports.py::download_full_bundle` streams the zip as a
+  native browser download (Frappe's file-response mechanism, not a
+  JSON blob over the RPC channel — the bundle can be hundreds of KB).
+  The Reproducibility page gained "Download Full Bundle (.zip)" and
+  "Reproduce & Verify" actions alongside Milestone 6's quick JSON
+  export.
+- One real bug fixed along the way: `run_architecture`'s regime-shift
+  snapshot stored the shift's *parameters* but not its *name* — meaning
+  nothing could look the shift back up to replay it. Caught while
+  writing `reproduce_run`, fixed by adding `"name"` to the snapshot.
+- 33 tests (3 new): the zip's contents are asserted file-by-file
+  (including that `model_metadata.json` never contains
+  `api_key_reference`), `reproduce_run` is proven on a real
+  `run_architecture` run (scenario hashes and metrics both match,
+  confirmed to be a genuinely new, independent run with its own ERP
+  documents), and a dedicated test proves `reproduce_run` *refuses* —
+  rather than guesses — on a run launched through the older
+  `run_specialist_routine` path that doesn't carry an architecture name.
+- **Verified live, on a run from three milestones ago, not a fresh
+  fixture:** built the full bundle for `RUN-00006` (the specialist-
+  architecture run from Milestone 6's real demo pilot) — all 14 files
+  present with real content, 37.7KB zip. Then called `reproduce_run` on
+  that same pre-existing run: it launched brand-new run `RUN-00010`,
+  reporting `scenario_stream_matches: true` and `metrics_match: true`.
+  This is the milestone's whole claim — "one-click export and
+  successful reproduction of one run from bundle" — demonstrated on
+  real, previously-existing data, not a run created specifically to
+  pass the demo.
+- **Deviations, stated plainly:** `run_manifest.json` has no
+  `experiment_id`/`cell_id` (still no link from `EORL Run` back to
+  `EORL Experiment` — a gap open since Milestone 2); `requirements_lock.txt`
+  pins frappe/erpnext/eorl_lab commits and the Python version, not a
+  full `pip freeze`; "resolved_prompts/" is folded into
+  `resolved_agent_configs/` since prompts aren't templated with runtime
+  substitution yet — the stored instructions *are* the resolved prompt;
+  `reproduce_run` only works for Milestone-5-and-later runs, by design,
+  not by oversight (see the dedicated test above). Counterfactual replay
+  from a *changed* configuration or a *specific episode* (spec section
+  19's richer branching, with lineage fields back to a source run) is
+  not built — this milestone is strictly "reproduce the same run
+  exactly," not "branch from here with a different architecture."
+
+---
+
 ## Test coverage so far
 
-30 tests, all green, spanning Milestones 1–7:
+33 tests, all green, spanning Milestones 1–8:
 - `test_eorl_settings.py`, `test_eorl_agent_template.py` (M1)
 - `test_eorl_run.py` (M2, incl. an authority-denial test)
 - `test_eorl_multi_agent_routine.py` (M3, incl. a submit-rights-denial
@@ -381,6 +451,9 @@ moment it exists, is now built and tested; it has nothing to measure yet.
 - `test_eorl_process_metrics_integration.py` (M7: real orchestrator runs
   through the real metrics pipeline, asserting both the coherence
   discrimination and the variety vacuity)
+- `test_eorl_reproducibility.py` (M8: full bundle contents file-by-file,
+  real reproduction with scenario-hash and metric verification, and a
+  refusal test for pre-Milestone-5 runs)
 
 Run: `bench --site erpnext.localhost run-tests --app eorl_lab`
 
@@ -402,10 +475,12 @@ Run: `bench --site erpnext.localhost run-tests --app eorl_lab`
   (see Milestone 7 above) — the math is built and tested, the signal
   isn't there yet. Needs either a non-deterministic/LLM provider or a
   real exception/ground-truth-driven scenario generator.
-- One-click reproducibility export/import (resolved prompts, replayable
-  scenario stream, computed metrics, re-run from bundle — section 18) —
-  Milestone 8. Milestone 6 only exports raw run/episode/event/memory
-  data.
+- Counterfactual replay from a *changed* configuration or branching from
+  a *specific episode* with lineage back to a source run (spec section
+  19's richer scope, beyond Milestone 8's "reproduce the same run
+  exactly") — not built.
+- `EORL Run` still has no link to `EORL Experiment` — run manifests omit
+  experiment_id/cell_id (open since Milestone 2).
 - External/HPC worker execution, Parquet export, isolated concurrent
   environments (section 20) — Milestone 9.
 - Inter-agent communication is currently orchestrator-enforced handoffs
@@ -422,4 +497,4 @@ Run: `bench --site erpnext.localhost run-tests --app eorl_lab`
 
 ---
 
-*Last updated: end of Milestone 7.*
+*Last updated: end of Milestone 8.*
