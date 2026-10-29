@@ -286,11 +286,85 @@ the Studio pages: `/app/eorl-lab`, `/app/eorl-experiment-studio`,
   but the rendered pages themselves are unverified by me. Worth a manual
   look before relying on them.
 
+## Milestone 7 — Process representation and theory metrics
+
+**Delivered:**
+- DocType: `EORL Metric` (spec section 6.13, listed since the original
+  spec but not actually needed until now).
+- `eorl_lab/analysis/` — `paths.py` (canonical action events, spec
+  section 17.1, and the 8-stage mapping from section 17.2),
+  `sequence.py` (unique sequence count, sequence/transition entropy,
+  modal-path share, directly-follows graph), `coherence.py` (actor/
+  functional/stage continuity and switch rates, average actor run
+  length, repeated-path probability), `repertoire.py` (viable-path
+  definitions with an explicitly versioned viability criterion per
+  spec's own instruction, breadth by exception family, reuse/novel/
+  extinction around a shock, top-k concentration), `recovery.py`
+  (post-shock drop, episodes-to-recover, area-under-recovery-curve,
+  post-shock error rate, change in entropy/concentration),
+  `networks.py` (communication network from `agent_message_sent`
+  events). **Every function takes plain dicts/lists shaped like
+  `eorl_lab.api.exports.export_run_bundle`'s output — none of them
+  query Frappe** (spec section 17's closing requirement: "All metric
+  functions must accept raw exported events so they can be recomputed
+  outside Frappe").
+- `eorl_lab/api/metrics.py::compute_run_metrics(run_name)` — the only
+  place that touches Frappe; fetches one run's episodes/events,
+  derives per-episode paths, calls the pure functions, and persists
+  each result as a versioned `EORL Metric` row. `compare_runs` (from
+  Milestone 6) now also surfaces `unique_sequence_count`,
+  `sequence_entropy`, `actor_continuity`, and `average_actor_run_length`
+  inline. The Compare Runs page gained a "Compute & Persist Full Metric
+  Set" panel.
+- **An empirically-grounded, two-sided finding, not a one-sided success
+  claim:** I checked, before writing any metric code, whether the
+  existing deterministic policies actually vary their tool-call
+  sequence across episodes — they don't. Every episode within a run
+  follows byte-identical stage/tool order; only argument *values*
+  (quantity, which supplier) differ. This means:
+  - **Routine-variety metrics are real but currently vacuous**:
+    `unique_sequence_count == 1` and `sequence_entropy == 0.0` on every
+    run checked so far (verified on both the specialist and
+    broad-autonomy runs from Milestone 6's real demo pilot) — not a bug,
+    an honest consequence of the policies not branching yet.
+  - **Coherence metrics genuinely discriminate architecture today**,
+    verified on that same real data: specialist run `RUN-00006` —
+    `actor_switch_rate = 0.314`, `actor_continuity = 0.686`,
+    `average_actor_run_length = 3.0`. Broad-autonomy run `RUN-00007` —
+    `actor_switch_rate = 0.0`, `actor_continuity = 1.0`,
+    `average_actor_run_length = 33.0` (the whole 3-episode run is one
+    unbroken actor identity). This is exactly the theoretical prediction
+    from spec section 2.3, now actually measured, not just plausible.
+  - Repertoire/adaptation metrics that depend on variety across phases
+    (novel paths after shock, path extinction, post-shock performance
+    drop) are also real and tested — proven correct on controlled
+    synthetic fixtures with genuine drops/recoveries/novel paths — but
+    return their vacuous values (0 drop, 0 novel paths, 100% reuse) on
+    live data, because the current regime shift only changes quantity,
+    never success/failure.
+- 30 tests (16 new): synthetic unit tests proving every formula against
+  hand-computed expected values on controlled fixtures (including a
+  fixture with genuine performance drops/recoveries and genuine path
+  extinction/novelty around a synthetic shock), plus integration tests
+  that run the real orchestrator, call `compute_run_metrics` for real,
+  and assert both the coherence discrimination *and* the variety
+  vacuity — the test suite enforces the honest finding, it doesn't just
+  happen to produce it once.
+
+**What this means for the research question going forward:** the
+adaptive-repertoire-paradox metrics (sections 2.2–2.3's whole point) will
+show real signal only once either (a) a non-deterministic/LLM provider
+introduces genuine path variation, or (b) the scenario generator's
+exception families and ground-truth-driven outcomes (still not built —
+Scenario Studio) make even a deterministic policy branch differently
+under different conditions. The machinery to measure that signal, the
+moment it exists, is now built and tested; it has nothing to measure yet.
+
 ---
 
 ## Test coverage so far
 
-14 tests, all green, spanning Milestones 1–6:
+30 tests, all green, spanning Milestones 1–7:
 - `test_eorl_settings.py`, `test_eorl_agent_template.py` (M1)
 - `test_eorl_run.py` (M2, incl. an authority-denial test)
 - `test_eorl_multi_agent_routine.py` (M3, incl. a submit-rights-denial
@@ -302,6 +376,11 @@ the Studio pages: `/app/eorl-lab`, `/app/eorl-experiment-studio`,
 - `test_eorl_experiment_studio_apis.py` (M6: cell/run-count math,
   validation incl. the stale-link edge case, a full paired-seed pilot
   launch exercised through Trace Explorer/Compare Runs/Export's own APIs)
+- `test_eorl_process_metrics_synthetic.py` (M7: every formula against
+  hand-computed values on controlled fixtures)
+- `test_eorl_process_metrics_integration.py` (M7: real orchestrator runs
+  through the real metrics pipeline, asserting both the coherence
+  discrimination and the variety vacuity)
 
 Run: `bench --site erpnext.localhost run-tests --app eorl_lab`
 
@@ -318,8 +397,11 @@ Run: `bench --site erpnext.localhost run-tests --app eorl_lab`
 - Agent Studio, Architecture Designer (graphical node-edge editor),
   Scenario Studio — agents and architectures are composed via plain
   DocType forms, not purpose-built composition UIs.
-- Process-path extraction and theory metrics (coherence, repertoire,
-  entropy, recovery curves — spec section 17) — Milestone 7.
+- Routine-variety, repertoire, and adaptation metrics have nothing to
+  discriminate on with today's deterministic, non-branching policies
+  (see Milestone 7 above) — the math is built and tested, the signal
+  isn't there yet. Needs either a non-deterministic/LLM provider or a
+  real exception/ground-truth-driven scenario generator.
 - One-click reproducibility export/import (resolved prompts, replayable
   scenario stream, computed metrics, re-run from bundle — section 18) —
   Milestone 8. Milestone 6 only exports raw run/episode/event/memory
@@ -340,4 +422,4 @@ Run: `bench --site erpnext.localhost run-tests --app eorl_lab`
 
 ---
 
-*Last updated: end of Milestone 6.*
+*Last updated: end of Milestone 7.*
