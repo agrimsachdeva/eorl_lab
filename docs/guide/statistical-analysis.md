@@ -111,16 +111,94 @@ Comparing `actor_continuity` across 5 `broad_autonomy` runs vs. 5
 Two structurally different test families — one parametric, one making
 no distributional assumption at all — agreeing the effect is real.
 
+## Equivalence testing (TOST)
+
+> V2 spec, section 45.1: *"The researcher must declare equivalence
+> bounds before running the test."*
+
+Set `EORL Analysis Plan.equivalence_bounds` to `"low,high"` and
+`compare_groups` automatically runs and persists a `tost_equivalence`
+result alongside the usual difference tests:
+
+```python
+plan.equivalence_bounds = "-0.1,0.1"
+plan.save()
+
+result = compare_groups(plan.name, runs_a, runs_b)
+# result["results"] now includes a third entry: {"test": "tost_equivalence", ...}
+```
+
+TOST answers a genuinely different question than Welch/permutation —
+"are these close enough to call the same," not "are these different."
+The two one-sided p-values are combined by taking their **max**:
+equivalence is only established if the difference is significantly
+within *both* bounds. A live example makes the distinction concrete:
+comparing two structurally identical `broad_autonomy` architectures on
+`actor_continuity` (which is architecturally exactly 1.0 for every
+broad_autonomy run) — Welch's t and the permutation test can't say
+anything useful (`nan` and `p=1.0`, correctly inconclusive on
+zero-variance data), but TOST confidently establishes equivalence
+(`p=0.0`). That's the point of having both: a difference test's
+failure to reject isn't evidence of equivalence, but TOST, built for
+exactly this question, can actually say so.
+
+## Episode-level analysis with a mixed-effects model
+
+Setting `analysis_unit = "run"` (the default) is the independent-units
+path described above. Setting it to `"episode"` is normally refused —
+*unless* `model_family = "mixed_effects"` is also set, which is the
+"explicit hierarchical specification" V2 section 44.2 offers as the
+honest alternative to blocking:
+
+```python
+plan.analysis_unit = "episode"
+plan.model_family = "mixed_effects"
+plan.outcome_metric = "success_rate"   # the only metric with a real per-episode value today
+plan.save()
+
+result = compare_groups(plan.name, runs_a, runs_b)
+# result["results"][0] == {"test": "mixed_effects", "coefficient": ..., "p_value": ...,
+#                           "n_clusters_a": ..., "converged": ..., ...}
+```
+
+This fits a genuine two-level model (`statsmodels`' `MixedLM`) with
+**run as the random-effect cluster** — episodes are modeled as
+correlated observations nested within their own run, never as
+independent rows, even though every individual episode contributes to
+the fit. `n_independent_runs_a`/`b` on the saved result are cluster
+counts; `n_episodes_a`/`b` are the real episode counts used.
+
+**Honest scope**: this only works for `outcome_metric = "success_rate"`
+today — mapped directly to each `EORL Episode.success`. Every other
+metric this app computes (`sequence_entropy`, `actor_continuity`, ...)
+is a genuine run-level aggregate over an entire run's episode paths
+with no single-episode definition, so `compare_groups` throws a clear
+error naming exactly this if asked for one at the episode level,
+rather than fabricating a per-episode value that doesn't mean anything.
+
+## Publication table export
+
+```python
+from eorl_lab.api.analysis import export_results_table
+
+export_results_table("My Analysis Plan", fmt="markdown")  # or fmt="csv"
+```
+
+Every `EORL Analysis Result` for a plan, in the order they were
+computed. This is a plain table export (V2 §50 scoped down) — not the
+full journal-formatted "Results Table Generator" with significance
+stars and footnotes that section ultimately describes.
+
 ## Honest limits of this phase
 
-- No mixed-effects/GEE/clustered model exists — `analysis_unit` has
-  exactly one supported value (`"run"`) today.
-- No multiple-testing correction (V2 §46) and no TOST equivalence
-  testing (V2 §45.1) yet.
+- No multiple-testing correction (V2 §46) — not even when a plan's
+  `equivalence_bounds` adds a third test family to a comparison that
+  already ran two difference tests.
 - Mann-Whitney U and Wilcoxon signed-rank (named in V2 §44.4 as
   "robustness" additions) aren't implemented.
 - The Process Explorer (DFG + swimlane), adaptation-trajectory plot,
-  and a dedicated distribution-comparison page aren't built as
-  graphical UI yet — the underlying data all three would need already
+  network explorer, robustness forest plot, replication-stability
+  diagnostics, and a dedicated paired-branch inference UI aren't built
+  as graphical pages yet — the underlying data for all of them already
   exists and is reachable (see [Using the Front End](front-end.md) and
   the [API Reference](../reference/analysis.md)).

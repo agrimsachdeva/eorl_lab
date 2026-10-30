@@ -1,7 +1,7 @@
 # EORL SOTA Roadmap
 
-**Status:** SOTA Milestone 5 delivered. Created 2026-10-29, updated 2026-10-30
-(SOTA M5).
+**Status:** SOTA Milestone 6 delivered. Created 2026-10-29, updated 2026-10-30
+(SOTA M6).
 
 This tracks progress against `docs/specs/EORL_SOTA_DEVELOPER_BUILD_SPEC_V2_ANALYTICS.md`
 ("V2"), a substantially larger specification than the one `PROGRESS.md`
@@ -698,19 +698,118 @@ Analytics workbench, phase 1 (V2 §44, §55's P0 slice).
 
 ---
 
-## 10. Next: SOTA Milestone 6 (analytics workbench, phase 2 / P1) or beyond
+## 10. SOTA Milestone 6 — Delivered
 
-SOTA Milestones 1–5 closed the structural gaps, delivered counterfactual
+Analytics workbench, phase 2 (V2 §55's P1 list, partial — equivalence
+testing, mixed-effects models, and publication table export).
+
+- **Equivalence testing (TOST, V2 §45.1)**:
+  `eorl_lab.analysis.stats.tost_equivalence` — two one-sided tests
+  against researcher-declared bounds (`EORL Analysis Plan
+  .equivalence_bounds`, a real field since Milestone 5 but unread until
+  now). The TOST p-value is the **max** of the two one-sided p-values,
+  not their average or minimum — equivalence is only established if
+  the difference is significantly within **both** bounds. Verified
+  against three sanity cases: generous bounds around near-identical
+  samples establish equivalence; the same data against bounds narrower
+  than the real variability correctly fails to establish it
+  (underpowered, not "equivalent"); clearly different samples against
+  narrow bounds give p≈1 (nowhere near equivalence). `compare_groups`
+  now runs and persists a `tost_equivalence` `EORL Analysis Result`
+  automatically whenever a plan's `equivalence_bounds` is set,
+  alongside the usual difference tests.
+- **Mixed-effects model — closes Milestone 5's own stated gap**: V2
+  section 44.2 offers two honest responses to "episodes aren't
+  independent" — block the analysis, or require an explicit
+  hierarchical specification. Milestone 5 only had the first.
+  `eorl_lab.analysis.stats.mixed_effects_comparison` (a real two-level
+  model via `statsmodels.formula.api.mixedlm`, run as cluster/random
+  effect) is the second: `compare_groups` now accepts
+  `analysis_unit == "episode"` **if and only if**
+  `model_family == "mixed_effects"` — any other combination still
+  throws. Verified two ways: (1) a synthetic dataset with a known
+  2.0 fixed effect and known cluster-level noise recovers the
+  coefficient correctly (within 0.3) with p<0.01 and `converged=True`;
+  (2) an earlier, noisier synthetic check (5 clusters/group, high
+  relative cluster noise) gave coefficient=0.939, p=0.187 — and an
+  **independent, from-scratch run-level Welch computation on the
+  identical raw data gave mean_diff=-0.939, p=0.224** — the two
+  completely different code paths agree almost exactly, which is
+  strong evidence the clustering is implemented correctly rather than
+  silently collapsing to something else.
+  - **Honest scope**: episode-level analysis only works for
+    `outcome_metric = "success_rate"` today (mapped directly to each
+    `EORL Episode.success`) — every other metric this app computes
+    (`sequence_entropy`, `actor_continuity`, ...) is a genuine run-level
+    aggregate over an entire run's episode paths with no single-episode
+    definition, so pretending one exists would be dishonest, not a
+    missing feature. `compare_groups` throws a clear error naming
+    exactly this if asked for any other metric at the episode level.
+- **A real platform edge case found and fixed, same category as
+  Milestone 5's**: on degenerate (zero-variance-at-every-level) input
+  — which `EORL Episode.success` legitimately is, since every episode
+  in every current test fixture succeeds — `MixedLM`'s optimizer can
+  fail to converge and emits noisy `ConvergenceWarning`s. The
+  `converged` field in the result already carries this signal
+  correctly; the warnings themselves are now suppressed at the source
+  (`warnings.catch_warnings()`) rather than left to clutter test/CI
+  output. The existing `_clean_float` NaN/Inf-to-NULL guard from
+  Milestone 5 already covered the resulting degenerate values reaching
+  `EORL Analysis Result` without any change needed.
+- **Publication table export (V2 §50, scoped to a plain table, not
+  the full formatting engine)**: `eorl_lab.api.analysis
+  .export_results_table(analysis_plan_name, fmt="markdown" | "csv")` —
+  every `EORL Analysis Result` for one plan, in computation order.
+- **Live-verified**: comparing two structurally identical
+  `broad_autonomy` architectures (5 runs each) on `actor_continuity`,
+  with `equivalence_bounds = "-0.1,0.1"`. Because `actor_continuity` is
+  architecturally **exactly 1.0 for every broad_autonomy run**, Welch's
+  t and the permutation test could say nothing useful here (`nan` and
+  `p=1.0` respectively — correctly inconclusive, not wrong) — but TOST,
+  built specifically to answer "are these the same," confidently
+  established equivalence (**p=0.0**). A clean demonstration of why
+  equivalence testing is a genuinely different question from a
+  difference test, not just a relabeled one.
+- 12 new tests (`test_eorl_analysis_engine_phase2.py`) cover TOST's
+  three behaviors, the mixed-effects model's coefficient recovery and
+  input validation, `compare_groups`'s new episode/mixed-effects path
+  (success + two rejection modes: wrong model_family, a metric with no
+  episode definition), and both export formats. **109/109 tests pass**
+  (97 existing + 12 new).
+- **Deviations / honest limits:**
+  - Paired-branch inference, the event-study/adaptation-trajectory
+    view, the Process Explorer / network explorer graphical pages, a
+    robustness forest plot, and replication-stability diagnostics —
+    all named in V2 §55's P1 list — are **not** built this milestone.
+    Paired-branch inference's *statistical* half was already real
+    since Milestone 5 (`paired_t_test`/`paired_permutation_test`,
+    verified sibling-branch checking); what's still missing is a
+    dedicated UI for it beyond the generic Scientific Cockpit. The
+    other four remain genuinely unbuilt, same honest gap as Milestone
+    5 left them.
+  - `export_results_table` is a plain table, not the full "Results
+    Table Generator" (journal-style formatted tables, significance
+    stars, footnotes) V2 §50 ultimately asks for.
+  - No multiple-testing correction is applied even when a plan's
+    `equivalence_bounds` adds a third test family to a comparison that
+    already ran two difference tests — V2 §46 remains unimplemented.
+
+---
+
+## 11. Next: SOTA Milestone 7 (remaining P1/P2 analytics) or beyond
+
+SOTA Milestones 1–6 closed the structural gaps, delivered counterfactual
 branching, replaced the all-deterministic run loop with a real,
 live-verified model provider and two new memory backends, generalized
 the Experiment Builder into a real factorial design with a
-theory-to-implementation Construct Registry and ablation marking, and
+theory-to-implementation Construct Registry and ablation marking,
 delivered a real, scipy-backed statistical inference engine with an
-enforced independence guardrail and trace-linked result provenance. The
-roadmap in section 4 above (and V2 §55's P1 list) covers what comes
-next: mixed-effects longitudinal models, paired-branch inference UI,
-equivalence tests, the event-study/adaptation-trajectory view, the
-Process Explorer / network explorer graphical pages, a robustness
-forest plot, replication-stability diagnostics, and publication table
-export. Confirm before continuing further, same as before starting
-Milestones 1 through 5.
+enforced independence guardrail and trace-linked result provenance, and
+closed that engine's own stated gap with a genuine mixed-effects model
+plus equivalence testing and publication table export. The roadmap in
+section 4 above (and V2 §55's remaining P1/P2 list) covers what comes
+next: the Process Explorer / network explorer / event-study graphical
+pages, a robustness forest plot, replication-stability diagnostics, a
+dedicated paired-branch inference UI, QAP/MRQAP, survival analysis UI,
+full power simulation, and the Theory Compiler wizard. Confirm before
+continuing further, same as before starting Milestones 1 through 6.

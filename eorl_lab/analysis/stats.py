@@ -9,6 +9,7 @@ Every function here operates on plain lists of floats -- one value per
 INDEPENDENT unit (normally one run, never one episode; see
 eorl_lab.api.analysis for where that guardrail is actually enforced).
 """
+import warnings
 from typing import List, Optional
 
 from scipy import stats as scipy_stats
@@ -132,3 +133,115 @@ def paired_hedges_g(a: List[float], b: List[float]) -> float:
 	n = len(diffs)
 	correction = 1.0 - (3.0 / (4.0 * (n - 1) - 1.0))
 	return float((_mean(diffs) / sd) * correction)
+
+
+# ---------------------------------------------------------------------------
+# Equivalence testing (V2 section 45.1): SOTA Milestone 6
+# ---------------------------------------------------------------------------
+
+def _welch_se_df(a: List[float], b: List[float]):
+	n_a, n_b = len(a), len(b)
+	se_a2, se_b2 = scipy_stats.tvar(a) / n_a, scipy_stats.tvar(b) / n_b
+	se = (se_a2 + se_b2) ** 0.5
+	if se == 0.0:
+		return 0.0, n_a + n_b - 2
+	df = (se_a2 + se_b2) ** 2 / ((se_a2 ** 2) / (n_a - 1) + (se_b2 ** 2) / (n_b - 1))
+	return se, df
+
+
+def tost_equivalence(a: List[float], b: List[float], low_bound: float, high_bound: float, alpha: float = 0.05) -> dict:
+	"""Two One-Sided Tests (TOST) for equivalence (V2 section 45.1): the
+	researcher declares equivalence bounds BEFORE running this -- the
+	caller is responsible for that (EORL Analysis Plan.equivalence_bounds
+	is saved before inferential results are generated, same discipline
+	as the rest of the Analysis Plan). Equivalence is established only
+	if the mean difference is significantly within BOTH bounds -- the
+	TOST p-value is the MAX of the two one-sided p-values, not their
+	average or minimum."""
+	if len(a) < 2 or len(b) < 2:
+		raise ValueError("tost_equivalence needs at least 2 independent units per group")
+	if low_bound >= high_bound:
+		raise ValueError(f"low_bound ({low_bound}) must be < high_bound ({high_bound})")
+
+	mean_diff = _mean(a) - _mean(b)
+	se, df = _welch_se_df(a, b)
+
+	if se == 0.0:
+		equivalent = low_bound < mean_diff < high_bound
+		return {
+			"test": "tost_equivalence", "mean_diff": mean_diff,
+			"low_bound": low_bound, "high_bound": high_bound, "alpha": alpha,
+			"p_value_lower": 0.0 if equivalent else 1.0, "p_value_upper": 0.0 if equivalent else 1.0,
+			"p_value": 0.0 if equivalent else 1.0, "equivalent": equivalent,
+		}
+
+	t_lower = (mean_diff - low_bound) / se
+	t_upper = (mean_diff - high_bound) / se
+	p_lower = float(scipy_stats.t.sf(t_lower, df))   # H0: true diff <= low_bound
+	p_upper = float(scipy_stats.t.cdf(t_upper, df))  # H0: true diff >= high_bound
+	p_value = max(p_lower, p_upper)
+
+	return {
+		"test": "tost_equivalence", "mean_diff": mean_diff,
+		"low_bound": low_bound, "high_bound": high_bound, "alpha": alpha,
+		"p_value_lower": p_lower, "p_value_upper": p_upper,
+		"p_value": p_value, "equivalent": p_value < alpha,
+	}
+
+
+# ---------------------------------------------------------------------------
+# Mixed-effects model (V2 section 44.2's "explicit hierarchical
+# specification" alternative to the independence guardrail's block):
+# SOTA Milestone 6
+# ---------------------------------------------------------------------------
+
+def mixed_effects_comparison(
+	episode_values_a: List[float], run_ids_a: List[str],
+	episode_values_b: List[float], run_ids_b: List[str],
+) -> dict:
+	"""A genuine two-level model for EPISODE-level outcomes, with RUN
+	as the random-effect cluster -- this is what makes analysis at the
+	episode level honest (V2 section 44.2): episodes are modeled as
+	correlated observations nested within their own run, not as
+	independent rows. Every element of `episode_values_a` must have a
+	corresponding run id in `run_ids_a` at the same position (same for
+	b) -- multiple episodes from the same run share the same run id."""
+	import pandas as pd
+	import statsmodels.formula.api as smf
+
+	if len(episode_values_a) != len(run_ids_a) or len(episode_values_b) != len(run_ids_b):
+		raise ValueError("episode_values and run_ids must be the same length within each group")
+	if len(set(run_ids_a)) < 2 or len(set(run_ids_b)) < 2:
+		raise ValueError("mixed_effects_comparison needs at least 2 distinct run clusters per group")
+
+	rows = [{"value": v, "condition": "A", "run_cluster": r} for v, r in zip(episode_values_a, run_ids_a)]
+	rows += [{"value": v, "condition": "B", "run_cluster": r} for v, r in zip(episode_values_b, run_ids_b)]
+	frame = pd.DataFrame(rows)
+
+	model = smf.mixedlm("value ~ condition", frame, groups=frame["run_cluster"])
+	# A degenerate input (e.g. zero variance within every cluster -- a
+	# real case this hits when every episode in both groups has the
+	# identical outcome) can leave the optimizer unable to converge.
+	# fit.converged already carries that signal for callers to check;
+	# the warning itself is just log noise once that signal exists.
+	with warnings.catch_warnings():
+		warnings.simplefilter("ignore")
+		fit = model.fit()
+
+	# The condition coefficient is whichever non-intercept term patsy
+	# created for the categorical "condition" column -- read it by
+	# position rather than hard-coding the exact "condition[T.B]"-style
+	# label, which is a formatting detail that can vary.
+	condition_term = [name for name in fit.params.index if name != "Intercept"][0]
+	ci = fit.conf_int().loc[condition_term]
+
+	return {
+		"test": "mixed_effects",
+		"coefficient": float(fit.params[condition_term]),
+		"p_value": float(fit.pvalues[condition_term]),
+		"ci_95": (float(ci[0]), float(ci[1])),
+		"n_episodes_a": len(episode_values_a), "n_episodes_b": len(episode_values_b),
+		"n_clusters_a": len(set(run_ids_a)), "n_clusters_b": len(set(run_ids_b)),
+		"converged": bool(fit.converged),
+		"group_variance": float(fit.cov_re.iloc[0, 0]),
+	}
