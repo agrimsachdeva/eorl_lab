@@ -1,5 +1,7 @@
 import frappe
 
+from eorl_lab.observability.context import ExperimentContext
+from eorl_lab.observability.events import emit_event
 from eorl_lab.runtime.orchestrator import branch_run as _branch_run
 from eorl_lab.runtime.orchestrator import get_full_branch_history, run_demo_episode
 
@@ -71,3 +73,32 @@ def get_branch_history(run: str) -> list:
 	must share byte-equivalent history through their common branch
 	point)."""
 	return get_full_branch_history(run)
+
+
+@frappe.whitelist()
+def mark_ablation(run: str, baseline_run: str, mechanism: str) -> dict:
+	"""SOTA Milestone 4 (V2 section 19): "Provide an interface for
+	marking a run as an ablation of another configuration." A thin,
+	explicit marking, recorded after the fact -- this does not itself
+	configure or toggle any mechanism (that's done the normal way, via
+	whatever EORL Tool Policy / EORL Memory Profile / EORL Communication
+	Policy fields the researcher already varied to produce `run`); it
+	just records that `run` represents `baseline_run` with `mechanism`
+	ablated, for the Mechanism/Ablation Dashboard (a later milestone) to
+	consume. Independent of branch_run()'s shared-history lineage: an
+	ablation need not share any episodes with its baseline."""
+	frappe.only_for(["System Manager", "EORL Administrator", "EORL Researcher"])
+	if not frappe.db.exists("EORL Run", baseline_run):
+		frappe.throw(f"Unknown baseline run: {baseline_run}")
+	if run == baseline_run:
+		frappe.throw("A run cannot be marked as an ablation of itself.")
+
+	run_doc = frappe.get_doc("EORL Run", run)
+	run_doc.is_ablation_of = baseline_run
+	run_doc.ablation_mechanism = mechanism
+	run_doc.save(ignore_permissions=True)
+
+	ctx = ExperimentContext(run_id=run_doc.name)
+	emit_event(ctx, "run_marked_ablation", payload={"baseline_run": baseline_run, "mechanism": mechanism})
+
+	return {"run": run_doc.name, "is_ablation_of": baseline_run, "ablation_mechanism": mechanism}

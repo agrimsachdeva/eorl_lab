@@ -1,0 +1,28 @@
+{
+ "doctype": "DocType",
+ "name": "EORL Experiment Factor",
+ "module": "EORL Lab",
+ "custom": 0,
+ "istable": 1,
+ "field_order": [
+  "factor_name",
+  "level_label",
+  "factor_type",
+  "architecture",
+  "regime_shift",
+  "is_baseline"
+ ],
+ "fields": [
+  {"fieldname": "factor_name", "fieldtype": "Data", "label": "Factor Name", "reqd": 1, "in_list_view": 1, "description": "e.g. 'coordination_structure'. Every row sharing the same factor_name is one LEVEL of that factor; the experiment's cell count is the product of each distinct factor_name's level count."},
+  {"fieldname": "level_label", "fieldtype": "Data", "label": "Level Label", "reqd": 1, "in_list_view": 1, "description": "Human-readable label for this level, e.g. 'Specialist Handoff'."},
+  {"fieldname": "factor_type", "fieldtype": "Select", "label": "Factor Type", "options": "architecture\nregime_shift", "reqd": 1, "in_list_view": 1, "description": "What this level actually varies at launch. Limited today to the two independent knobs run_architecture() exposes -- varying model/memory profile per factor would require per-combination EORL Architecture documents (actor_slots bind specific agent templates), so model/memory variation is expressed by making 'architecture' itself the factor."},
+  {"fieldname": "architecture", "fieldtype": "Link", "label": "Architecture", "options": "EORL Architecture", "description": "Set when factor_type = architecture."},
+  {"fieldname": "regime_shift", "fieldtype": "Link", "label": "Regime Shift", "options": "EORL Regime Shift", "description": "Set when factor_type = regime_shift. Leave blank for a 'no shift' baseline level."},
+  {"fieldname": "is_baseline", "fieldtype": "Check", "label": "Is Baseline Level", "description": "Marks this level as the reference level for this factor (V2 section 19's ablation framing: other levels are described relative to this one)."}
+ ],
+ "permissions": [
+  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
+  {"role": "EORL Administrator", "read": 1, "write": 1, "create": 1, "delete": 1},
+  {"role": "EORL Researcher", "read": 1, "write": 1, "create": 1, "delete": 0}
+ ]
+}

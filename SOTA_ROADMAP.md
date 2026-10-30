@@ -1,7 +1,7 @@
 # EORL SOTA Roadmap
 
-**Status:** SOTA Milestone 3 delivered. Created 2026-10-29, updated 2026-10-30
-(SOTA M3).
+**Status:** SOTA Milestone 4 delivered. Created 2026-10-29, updated 2026-10-30
+(SOTA M4).
 
 This tracks progress against `docs/specs/EORL_SOTA_DEVELOPER_BUILD_SPEC_V2_ANALYTICS.md`
 ("V2"), a substantially larger specification than the one `PROGRESS.md`
@@ -478,12 +478,117 @@ driven a single decision.
 
 ---
 
-## 8. Next: SOTA Milestone 4 (Construct Registry + Experiment Builder expansion) or beyond
+## 8. SOTA Milestone 4 — Delivered
 
-SOTA Milestones 1–3 closed the structural gaps, delivered counterfactual
-branching, and replaced the all-deterministic run loop with per-agent
-provider resolution plus a real, live-verified model provider and two
-new memory backends. The roadmap in section 4 above still applies for
-what comes next (Construct Registry/Experiment Builder expansion →
-analytics workbench phase 1). Confirm before continuing further, same
-as before starting Milestones 1, 2, and 3.
+Construct Registry + Experiment Builder expansion (V2 §20, §28.7).
+
+- **`EORL Construct`**, a real standalone DocType (not a child table) —
+  "a reusable library connecting theory to implementation" per spec
+  wording. `construct_name`, `theoretical_definition`,
+  `level_of_analysis`, `source_citations`, `computational_definition`,
+  `manipulation_strategy`, `measurement_function`, `required_events`,
+  `validity_notes`, `version` — every field the spec names. A
+  controller method, `resolve_measurement_function()`, makes the
+  "theory-to-implementation" link real and testable: it calls
+  `frappe.get_attr()` on the dotted path and raises `NotImplementedError`
+  loudly if the construct has none configured, rather than silently
+  claiming a capability that doesn't exist.
+- **All 8 "initial constructs" the spec names are seeded** (via a real
+  Frappe patch, `eorl_lab.patches.v1_seed_initial_constructs`, so a
+  fresh install gets them automatically on `bench migrate` — not a
+  one-off script I ran and forgot). **Honest finding, stated rather
+  than glossed over: only 2 of the 8 (Routine coherence, Adaptive
+  repertoire) have a real, working `measurement_function` today** —
+  `eorl_lab.analysis.coherence.actor_continuity` and
+  `eorl_lab.analysis.repertoire.viable_path_entropy` respectively, both
+  verified by a test that actually calls the resolved function against
+  a real run's events. The other 6 (Centralization, Specialization,
+  Formalization, Information asymmetry, Hierarchy, Transactive memory)
+  are seeded with `measurement_function` **deliberately left blank**
+  and an honest `validity_notes` explaining exactly what's missing —
+  in Transactive memory's case, that there is no expertise-belief
+  modeling anywhere in the system at all, not just a missing metric
+  function. The registry's value is in being a truthful map of
+  theory-to-implementation as it stands today, not an aspirational one.
+- **`EORL Experiment Factor`** (new child table) + `EORL
+  Experiment.factors` generalize the fixed `architecture_a` /
+  `architecture_b` pair into a real N-factor, K-level factorial
+  design — **without changing the original behavior at all**: when
+  `factors` is empty, `cell_count()`, `total_run_count()`,
+  `validate_experiment`, and `launch_pilot` all take the exact original
+  Milestone 6 code path, byte-for-byte (verified directly by a test
+  using the OLD architecture_a/architecture_b fixture shape, asserting
+  `factorial_cells() == []` and the old arithmetic). When `factors` has
+  rows, `launch_pilot` runs the full cartesian product of every
+  distinct `factor_name`'s levels — live-verified with a real 2×2
+  design (coordination structure × regime shift) producing 4 real runs,
+  each resolving the right architecture/regime-shift combination, with
+  `seed_strategy: paired` giving every cell in a repetition the
+  identical seed (V2 §18) exactly as the 1-factor path already did.
+  **Honest scope:** factor levels are limited to `architecture` and
+  `regime_shift` — the two independent knobs `run_architecture()`
+  actually exposes. Varying model/memory profile as a factor isn't
+  possible independently of architecture (an `EORL Architecture`'s
+  `actor_slots` bind specific agent templates with baked-in profiles),
+  so that's expressed by making architecture itself the factor
+  (different architectures pointing at agent templates with different
+  model profiles) rather than inventing unsupported runtime behavior.
+- **`EORL Experiment.focal_construct`** (optional `Link` to `EORL
+  Construct`) — V2 §21's Theory Compiler names "focal theoretical
+  construct" as its first researcher input; this is that link, without
+  building the full wizard (still a later milestone).
+- **Ablation marking** (V2 §19: *"Provide an interface for marking a
+  run as an ablation of another configuration."*) — read literally, as
+  a thin interface, not a new engine. `EORL Run` gained
+  `is_ablation_of` (Link to `EORL Run`) and `ablation_mechanism`
+  (text), set via the new whitelisted `eorl_lab.api.runs.mark_ablation`,
+  which also emits a real `run_marked_ablation` event. Deliberately
+  independent of `branch_run()`'s shared-history lineage from SOTA
+  Milestone 2 — an ablation is a separate full run with one mechanism
+  toggled, not required to share any episodes with its baseline, which
+  matches the spec's own ablation examples (memory/tool/communication
+  ablation as separate complete runs compared against a baseline, not
+  branches of it).
+- 15 new tests (`test_eorl_construct_registry_and_factorial_experiments.py`)
+  cover: all 8 constructs seeded; the 2 implemented ones resolve to a
+  real callable and actually run against real event data; an
+  unimplemented one raises `NotImplementedError` rather than silently
+  returning something; the 1-factor/2-level backward-compatibility
+  guarantee; cell-count arithmetic for a 2×2 design; a full live
+  `launch_pilot` across all 4 cells with correct architecture/regime
+  resolution and paired seeding; `focal_construct` validation (valid
+  and invalid); invalid architecture inside a factor row;
+  `mark_ablation`'s success path, its emitted event, and its two
+  rejection paths (unknown baseline, self-reference). **84/84 tests
+  pass** (69 existing + 15 new; the live Qwen integration test from
+  SOTA Milestone 3 continues to run and pass as part of the same app
+  test suite).
+- **Deviations / honest limits:**
+  - No queued/background execution for large factorial designs —
+    `launch_pilot` still runs every cell × repetition synchronously
+    within the request (the same Milestone 6 deviation as before;
+    Milestone 9's scope, unchanged).
+  - The Theory Compiler wizard (V2 §21) is not built; `focal_construct`
+    is a link field, not a structured intake flow.
+  - The Mechanism/Ablation Dashboard (V2 §43) that would actually
+    *consume* `is_ablation_of`/`ablation_mechanism` visually is not
+    built — this milestone is the marking interface only, as the spec
+    literally asked for.
+  - `shared`/`vector` memory backends and 6 of the 8 constructs'
+    measurement functions remain unimplemented, unchanged from prior
+    milestones' honest gaps.
+
+---
+
+## 9. Next: SOTA Milestone 5 (analytics workbench, phase 1) or beyond
+
+SOTA Milestones 1–4 closed the structural gaps, delivered counterfactual
+branching, replaced the all-deterministic run loop with a real,
+live-verified model provider and two new memory backends, and
+generalized the Experiment Builder into a real factorial design with a
+theory-to-implementation Construct Registry and ablation marking. The
+roadmap in section 4 above still applies for what comes next (analytics
+workbench phase 1, V2 §55's P0 slice: Scientific Cockpit, Process
+Explorer, independence-guardrail Analysis Plan, Welch/permutation test).
+Confirm before continuing further, same as before starting Milestones 1
+through 4.

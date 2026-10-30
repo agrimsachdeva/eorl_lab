@@ -1,18 +1,44 @@
+import itertools
+
 from frappe.model.document import Document
 
 
 class EORLExperiment(Document):
-	"""Milestone 6 deviation from spec section 6.9: this supports exactly
-	the one-factor, up-to-two-level design (architecture_a vs
-	architecture_b) that Milestones 2-5 were built around, not a general
-	N-factor factorial table with explicit cell definitions. Extending to
-	arbitrary factors (model family, memory profile, etc. as additional
-	levels) is future work for whoever builds the full Experiment Studio
-	wizard; the cell-count/run-count arithmetic below generalizes
-	trivially once that table exists."""
+	"""Milestone 6 built exactly the one-factor, up-to-two-level design
+	(architecture_a vs architecture_b) Milestones 2-5 were constructed
+	around. SOTA Milestone 4 (V2 section 28.7) generalizes this to a real
+	N-factor, K-level factorial design via the `factors` child table,
+	WITHOUT changing architecture_a/architecture_b's existing behavior:
+	when `factors` is empty, every method below falls back to the
+	original 1-factor/2-level arithmetic byte-for-byte."""
+
+	def _factor_groups(self) -> dict:
+		groups = {}
+		for row in self.factors:
+			groups.setdefault(row.factor_name, []).append(row)
+		return groups
 
 	def cell_count(self) -> int:
-		return 2 if self.architecture_b else 1
+		groups = self._factor_groups()
+		if not groups:
+			return 2 if self.architecture_b else 1
+		count = 1
+		for levels in groups.values():
+			count *= len(levels)
+		return count
 
 	def total_run_count(self) -> int:
 		return self.cell_count() * (self.repetitions_per_cell or 1)
+
+	def factorial_cells(self) -> list:
+		"""Cartesian product of every distinct factor_name's levels, as a
+		list of {factor_name: EORL Experiment Factor row} dicts, one per
+		cell. Empty list (not an error) when `factors` has no rows --
+		callers fall back to the architecture_a/architecture_b path in
+		that case, same as cell_count() does."""
+		groups = self._factor_groups()
+		if not groups:
+			return []
+		names = list(groups.keys())
+		level_lists = [groups[name] for name in names]
+		return [dict(zip(names, combo)) for combo in itertools.product(*level_lists)]

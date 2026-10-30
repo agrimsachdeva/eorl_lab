@@ -11,6 +11,10 @@ def get_experiment_summary(experiment_name: str) -> dict:
 		"status": exp.status,
 		"architecture_a": exp.architecture_a,
 		"architecture_b": exp.architecture_b,
+		"factors": [
+			{"factor_name": r.factor_name, "level_label": r.level_label, "factor_type": r.factor_type, "is_baseline": r.is_baseline}
+			for r in exp.factors
+		],
 		"cell_count": exp.cell_count(),
 		"repetitions_per_cell": exp.repetitions_per_cell,
 		"total_run_count": exp.total_run_count(),
@@ -18,6 +22,7 @@ def get_experiment_summary(experiment_name: str) -> dict:
 		"seed_strategy": exp.seed_strategy,
 		"base_seed": exp.base_seed,
 		"regime_shift": exp.regime_shift,
+		"focal_construct": exp.focal_construct,
 	}
 
 
@@ -25,13 +30,55 @@ def get_experiment_summary(experiment_name: str) -> dict:
 def validate_experiment(experiment_name: str) -> dict:
 	exp = frappe.get_doc("EORL Experiment", experiment_name)
 	errors = []
-	if not exp.architecture_a:
-		errors.append("architecture_a is required")
+	cells = exp.factorial_cells()
+
+	if cells:
+		# SOTA Milestone 4: the generalized N-factor path. Every row's
+		# referenced document must actually exist, and at least one
+		# factor must resolve an architecture for every cell (either its
+		# own 'architecture' factor, or the architecture_a fallback).
+		for row in exp.factors:
+			if row.factor_type == "architecture" and row.architecture and not frappe.db.exists("EORL Architecture", row.architecture):
+				errors.append(f"factor {row.factor_name!r} level {row.level_label!r}: architecture {row.architecture!r} does not exist")
+			if row.factor_type == "regime_shift" and row.regime_shift and not frappe.db.exists("EORL Regime Shift", row.regime_shift):
+				errors.append(f"factor {row.factor_name!r} level {row.level_label!r}: regime_shift {row.regime_shift!r} does not exist")
+		has_architecture_factor = any(row.factor_type == "architecture" for row in exp.factors)
+		if not has_architecture_factor and not exp.architecture_a:
+			errors.append("no 'architecture' factor is defined and architecture_a is not set as a fallback")
+	else:
+		# Original Milestone 6 path, unchanged.
+		if not exp.architecture_a:
+			errors.append("architecture_a is required")
+		if exp.architecture_b and not frappe.db.exists("EORL Architecture", exp.architecture_b):
+			errors.append(f"architecture_b {exp.architecture_b!r} does not exist")
+
 	if exp.regime_shift and not frappe.db.exists("EORL Regime Shift", exp.regime_shift):
 		errors.append(f"regime_shift {exp.regime_shift!r} does not exist")
-	if exp.architecture_b and not frappe.db.exists("EORL Architecture", exp.architecture_b):
-		errors.append(f"architecture_b {exp.architecture_b!r} does not exist")
+	if exp.focal_construct and not frappe.db.exists("EORL Construct", exp.focal_construct):
+		errors.append(f"focal_construct {exp.focal_construct!r} does not exist")
+
 	return {"valid": not errors, "errors": errors, "cell_count": exp.cell_count(), "total_run_count": exp.total_run_count()}
+
+
+def _resolve_cell(exp, cell: dict) -> tuple:
+	"""Resolves one factorial cell (a {factor_name: EORL Experiment
+	Factor row} dict) into the (architecture, regime_shift) pair
+	run_architecture() actually needs, falling back to the experiment's
+	own architecture_a / regime_shift for any dimension this cell
+	doesn't itself factor over."""
+	architecture = None
+	regime_shift_set = False
+	regime_shift = None
+	for row in cell.values():
+		if row.factor_type == "architecture":
+			architecture = row.architecture
+		elif row.factor_type == "regime_shift":
+			regime_shift = row.regime_shift
+			regime_shift_set = True
+	architecture = architecture or exp.architecture_a
+	if not regime_shift_set:
+		regime_shift = exp.regime_shift
+	return architecture, regime_shift
 
 
 @frappe.whitelist()
@@ -39,10 +86,16 @@ def launch_pilot(experiment_name: str, repetitions: int = None) -> dict:
 	"""Milestone 6 deviation: runs synchronously within the request for a
 	small pilot (spec section 7.5's "Launch Pilot"), not queued as
 	background jobs. Queued/external execution for full-scale experiments
-	is Milestone 9's scope. `seed_strategy == "paired"` gives
-	architecture_a and architecture_b the same seed per repetition (spec
-	section 18); "independent" offsets by architecture index so they
-	don't collide but also aren't required to match."""
+	is Milestone 9's scope.
+
+	SOTA Milestone 4 (V2 section 28.7) generalizes this from the fixed
+	architecture_a/architecture_b pair to the full cartesian product of
+	`EORL Experiment.factors`' levels when any are defined --
+	`seed_strategy == "paired"` still gives every cell in the same
+	repetition the identical exogenous scenario stream (spec section 18);
+	"independent" offsets by cell index so they don't collide but also
+	aren't required to match. When `factors` is empty, behavior is
+	byte-identical to the original architecture_a-vs-architecture_b path."""
 	frappe.only_for(["System Manager", "EORL Administrator", "EORL Researcher"])
 
 	exp = frappe.get_doc("EORL Experiment", experiment_name)
@@ -51,32 +104,62 @@ def launch_pilot(experiment_name: str, repetitions: int = None) -> dict:
 		frappe.throw(f"Cannot launch: {'; '.join(validation['errors'])}")
 
 	reps = int(repetitions) if repetitions else (exp.repetitions_per_cell or 1)
-	architectures = [a for a in [exp.architecture_a, exp.architecture_b] if a]
+	cells = exp.factorial_cells()
 
 	launched = []
-	for rep in range(reps):
-		for arch_index, architecture in enumerate(architectures):
-			if exp.seed_strategy == "independent":
-				seed = (exp.base_seed or 42) + rep * 1000 + arch_index * 100
-			else:
-				seed = (exp.base_seed or 42) + rep
+	if cells:
+		for rep in range(reps):
+			for cell_index, cell in enumerate(cells):
+				if exp.seed_strategy == "independent":
+					seed = (exp.base_seed or 42) + rep * 1000 + cell_index * 100
+				else:
+					seed = (exp.base_seed or 42) + rep
 
-			result = run_architecture(
-				architecture,
-				seed=seed,
-				episode_count=exp.episode_count or 1,
-				regime_shift=exp.regime_shift,
-			)
-			launched.append(
-				{
-					"architecture": architecture,
-					"repetition": rep,
-					"seed": seed,
-					"run": result["run"],
-					"success": result["outcome"]["success"],
-					"event_count": result["event_count"],
-				}
-			)
+				architecture, regime_shift = _resolve_cell(exp, cell)
+				if not architecture:
+					frappe.throw(
+						f"Cell {cell_index} ({ {n: r.level_label for n, r in cell.items()} }) has no "
+						f"architecture resolved (no 'architecture' factor in it and no architecture_a fallback)."
+					)
+
+				result = run_architecture(architecture, seed=seed, episode_count=exp.episode_count or 1, regime_shift=regime_shift)
+				launched.append(
+					{
+						"cell": {name: row.level_label for name, row in cell.items()},
+						"architecture": architecture,
+						"regime_shift": regime_shift,
+						"repetition": rep,
+						"seed": seed,
+						"run": result["run"],
+						"success": result["outcome"]["success"],
+						"event_count": result["event_count"],
+					}
+				)
+	else:
+		architectures = [a for a in [exp.architecture_a, exp.architecture_b] if a]
+		for rep in range(reps):
+			for arch_index, architecture in enumerate(architectures):
+				if exp.seed_strategy == "independent":
+					seed = (exp.base_seed or 42) + rep * 1000 + arch_index * 100
+				else:
+					seed = (exp.base_seed or 42) + rep
+
+				result = run_architecture(
+					architecture,
+					seed=seed,
+					episode_count=exp.episode_count or 1,
+					regime_shift=exp.regime_shift,
+				)
+				launched.append(
+					{
+						"architecture": architecture,
+						"repetition": rep,
+						"seed": seed,
+						"run": result["run"],
+						"success": result["outcome"]["success"],
+						"event_count": result["event_count"],
+					}
+				)
 
 	exp.status = "pilot_launched"
 	exp.save()
