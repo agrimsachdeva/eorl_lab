@@ -1,0 +1,15 @@
+{
+ "doctype": "Page",
+ "module": "EORL Lab",
+ "name": "eorl-adaptation-view",
+ "page_name": "eorl-adaptation-view",
+ "title": "EORL Adaptation / Event-Study View",
+ "standard": "Yes",
+ "system_page": 0,
+ "roles": [
+  {"role": "System Manager"},
+  {"role": "EORL Administrator"},
+  {"role": "EORL Researcher"},
+  {"role": "EORL Viewer"}
+ ]
+}

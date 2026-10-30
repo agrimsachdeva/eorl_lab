@@ -1,7 +1,7 @@
 # EORL SOTA Roadmap
 
-**Status:** SOTA Milestone 6 delivered. Created 2026-10-29, updated 2026-10-30
-(SOTA M6).
+**Status:** SOTA Milestone 7 delivered. Created 2026-10-29, updated 2026-10-30
+(SOTA M7).
 
 This tracks progress against `docs/specs/EORL_SOTA_DEVELOPER_BUILD_SPEC_V2_ANALYTICS.md`
 ("V2"), a substantially larger specification than the one `PROGRESS.md`
@@ -796,20 +796,105 @@ testing, mixed-effects models, and publication table export).
 
 ---
 
-## 11. Next: SOTA Milestone 7 (remaining P1/P2 analytics) or beyond
+## 11. SOTA Milestone 7 — Delivered
 
-SOTA Milestones 1–6 closed the structural gaps, delivered counterfactual
+Three graphical front-end pages that Milestones 5 and 6 had each, in
+turn, deferred — Process Explorer, Network Explorer, and the
+Adaptation/Event-Study view (V2 §§39, 40, 42) — stop being deferred a
+third time.
+
+- **`eorl_lab.api.process`** (new module): `get_process_explorer_data`,
+  `get_network_explorer_data`, `get_adaptation_view_data` — all three
+  read data that already existed (the pooled `directly_follows_graph`
+  and `communication_network` metrics from Milestone 7's original
+  metric suite, raw `EORL Event`/`EORL Episode` rows); nothing new was
+  computed to build this, only exposed and rendered.
+- **Process Explorer** (`/app/eorl-process-explorer`): the
+  Directly-Follows Graph as a count-sorted edge table (`from`, `to`,
+  count, % of that node's outgoing total) — pooled across the whole
+  run, using the same canonical `STAGE:tool_name` labels
+  `process_path()` already produces — plus a per-episode swimlane
+  table (one row per episode, one column per step, each cell the
+  actor+tool that executed it).
+- **Network Explorer** (`/app/eorl-network-explorer`): the
+  agent-message network as both a simple hand-drawn SVG (circular
+  actor layout, edge thickness proportional to message count — no
+  charting/graph-drawing dependency added; actor counts in this system
+  are small enough that this is honestly simpler than pulling one in)
+  and a plain edge table.
+- **Adaptation / Event-Study View** (`/app/eorl-adaptation-view`): a
+  real line chart (`frappe.Chart`, bundled with every Frappe install —
+  verified as the same charting primitive ERPNext's own pages use, not
+  a new dependency) of per-episode success across a run, plus a
+  phase-highlighted table calling out exactly which episode a regime
+  shift triggers at — shown to the researcher here, never to the
+  agents themselves (V2 §2.4).
+- **Live-verified** with a real 30-episode `specialist_handoff` run and
+  a regime shift at episode 20: the DFG correctly showed the
+  `PURCHASE_ORDER:get_purchase_order` node splitting 50/50 into its two
+  real successors (the Purchasing Manager's approval review and the
+  Warehouse Agent's receipt review — the same canonical label, two
+  genuinely different purposes, both real structural edges); the
+  Network Explorer showed the exact 4-stage handoff chain, each edge
+  at 100% (`Purchasing Agent → Purchasing Manager Agent → Warehouse
+  Agent → Accounts Payable Agent`); the Adaptation view correctly
+  reported `regime_shift_trigger_episode = 20` and showed episodes
+  17–19 as `phase: stable` transitioning to `phase: shock` exactly at
+  episode 20.
+- 5 new tests (`test_eorl_process_and_network_explorer.py`) cover: the
+  DFG edges contain the real specialist-handoff stage transitions with
+  valid percentages; the swimlane has one row per episode with real,
+  non-empty steps across all 4 actors; the network explorer's shape is
+  always valid whether or not a quality exception produced a real
+  message edge; the adaptation view correctly reports a regime shift's
+  trigger episode when one was used, and `None` when it wasn't.
+  **114/114 tests pass** (109 existing + 5 new — one transient failure
+  from the live Qwen integration test hitting its known
+  `finish_reason='length'` risk, documented since Milestone 3, was
+  confirmed non-reproducible on an immediate retry: unrelated to this
+  milestone's changes).
+- **A genuine process note, not a milestone finding**: the full
+  regression suite (~5 minutes, including the live Qwen test)
+  intermittently truncated mid-run over the SSH→`docker exec`→`bench`
+  pipe used throughout this project, with no error reported — not a
+  test failure, a tunnel/pipe instability on long-lived piped output.
+  Fixed by detaching the run on the remote host itself
+  (`docker exec -d ... > logfile 2>&1; echo DONE_EXIT_$? >> logfile`)
+  and polling for the completion marker with short, independent SSH
+  calls, which held up reliably. Worth remembering for any future
+  long-running remote command in this project.
+- **Deviations / honest limits:**
+  - The DFG and network views are table/simple-SVG based, not a full
+    interactive node-link graph layout (drag, zoom, force-directed
+    positioning) — a deliberate choice, not a missing capability: this
+    system's typical actor/stage counts (≤5) don't yet justify a graph-
+    layout dependency, and the table form is more precise for exact
+    counts/percentages anyway.
+  - Cross-filtering between panels (V2 §28.3, visualization acceptance
+    test 54.1) still doesn't apply — each of these pages is its own
+    independent view, not linked to the Scientific Cockpit's selections.
+  - A robustness forest plot, replication-stability diagnostics, a
+    dedicated paired-branch inference UI, QAP/MRQAP, survival analysis
+    UI, full power simulation, and the Theory Compiler wizard remain
+    unbuilt — unchanged from Milestone 6's honest gaps.
+
+---
+
+## 12. Next: SOTA Milestone 8 (remaining P1/P2 analytics) or beyond
+
+SOTA Milestones 1–7 closed the structural gaps, delivered counterfactual
 branching, replaced the all-deterministic run loop with a real,
 live-verified model provider and two new memory backends, generalized
 the Experiment Builder into a real factorial design with a
 theory-to-implementation Construct Registry and ablation marking,
-delivered a real, scipy-backed statistical inference engine with an
-enforced independence guardrail and trace-linked result provenance, and
-closed that engine's own stated gap with a genuine mixed-effects model
-plus equivalence testing and publication table export. The roadmap in
-section 4 above (and V2 §55's remaining P1/P2 list) covers what comes
-next: the Process Explorer / network explorer / event-study graphical
-pages, a robustness forest plot, replication-stability diagnostics, a
-dedicated paired-branch inference UI, QAP/MRQAP, survival analysis UI,
-full power simulation, and the Theory Compiler wizard. Confirm before
-continuing further, same as before starting Milestones 1 through 6.
+delivered a real, scipy-backed statistical inference engine (closing
+its own stated gap with a genuine mixed-effects model, equivalence
+testing, and publication table export), and shipped the Process
+Explorer, Network Explorer, and Adaptation/Event-Study graphical pages
+that two prior milestones had each deferred. The roadmap in section 4
+above (and V2 §55's remaining P1/P2 list) covers what comes next: a
+robustness forest plot, replication-stability diagnostics, a dedicated
+paired-branch inference UI, cross-filtering between panels, QAP/MRQAP,
+survival analysis UI, full power simulation, and the Theory Compiler
+wizard. Confirm before continuing further, same as before starting
+Milestones 1 through 7.

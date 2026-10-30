@@ -55,6 +55,28 @@ provenance. Refuses to run if the plan's `analysis_unit` isn't `"run"`
 (the independence guardrail — see
 [Statistical Analysis](../guide/statistical-analysis.md)).
 
+## Process Explorer (`/app/eorl-process-explorer`)
+
+Pick a run. Shows the Directly-Follows Graph, pooled across every
+episode in the run, as a count-sorted edge table (`from`, `to`, count,
+% of that node's outgoing total) using the same canonical
+`STAGE:tool_name` labels the process-mining metrics already use — plus
+a per-episode swimlane table, one row per episode and one column per
+step, each cell naming the actor and tool that executed it.
+
+## Network Explorer (`/app/eorl-network-explorer`)
+
+Pick a run. Shows the agent-message network (who messaged whom, and
+how often) as a simple circular-layout SVG — edge thickness
+proportional to message count — plus a plain edge table underneath.
+
+## Adaptation / Event-Study View (`/app/eorl-adaptation-view`)
+
+Pick a run. A real line chart of per-episode success, plus a
+phase-highlighted table calling out exactly which episode a regime
+shift triggers at (if the run used one) — shown here to the
+researcher, never to the agents themselves.
+
 ## Reproducibility / Export (`/app/eorl-reproducibility`)
 
 - **Quick Export (JSON)** — a fast single-run dump.
