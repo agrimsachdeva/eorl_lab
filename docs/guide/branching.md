@@ -16,21 +16,21 @@ branch_a = branch_run(
 )
 branch_b = branch_run(
     "RUN-00050", branch_episode=5, additional_episode_count=5,
-    architecture_name="Specialist Handoff",  # a genuinely different intervention
+    architecture_name="Specialist Handoff",  # a different intervention
     intervention_description="switches to specialist_handoff after episode 5",
 )
 ```
 
 Both branches:
 
-- continue the **same exogenous scenario stream** (identical
-  `run_seed`), so episodes 6+ see the same cases the parent would have
-  — the intervention is the architecture (or regime shift), not luck
-- clone the parent's **actor memory** accumulated through the branch
-  episode (`EORL Memory Record` rows are copied, not referenced —
+- continue the same exogenous scenario stream (identical `run_seed`),
+  so episodes 6+ see the same cases the parent would have — the
+  intervention is the architecture (or regime shift), not luck
+- clone the parent's actor memory accumulated through the branch
+  episode (`EORL Memory Record` rows are copied, not referenced, so
   each branch's actors start with the same accumulated memory the
   parent had, then diverge independently from there)
-- **never duplicate episode data** — episodes 1..5 stay owned by the
+- never duplicate episode data — episodes 1..5 stay owned by the
   parent run
 
 ## Reconstructing one continuous history
@@ -47,26 +47,26 @@ history_b = get_full_branch_history(branch_b["branch_run"])
 
 This walks the `parent_run` / `branch_point_episode` chain back to the
 root and reads each ancestor's own episodes up to wherever the next
-descendant diverged — it never copies data between runs, only changes
+descendant diverged. It never copies data between runs, only changes
 which run the read comes from.
 
-## The honest limit: ERP state is not forked
+## The known limit: ERP state isn't forked
 
-**Every branch's post-branch-point tool calls create real, permanent
-ERPNext documents in the same shared company.** There is no per-branch
-isolated universe at the ERP layer (that would need per-branch site
-clones — V2 §20's "scalable strategy", not built). Concretely:
+Every branch's post-branch-point tool calls create real, permanent
+ERPNext documents in the same shared company. There is no per-branch
+isolated universe at the ERP layer — that would need per-branch site
+clones (V2 §20's "scalable strategy," not built). Concretely:
 
-- Two branches each create their own, distinct `Purchase Order` — never
-  a shared/duplicated document
-- But both branches' Purchase Orders reference the **same** `company`,
+- Two branches each create their own, distinct `Purchase Order` —
+  never a shared or duplicated document
+- But both branches' Purchase Orders reference the same `company`,
   the same `Item` master data, the same supplier master data
 
-So: **process/event-derived comparisons are valid** across branches
-(paths, coherence, variety, actor continuity — these derive purely from
-each branch's own events). **Comparisons against absolute shared ERP
-aggregates are not** (e.g. "current stock level" — multiple branches
-mutate the same underlying ledger concurrently).
+So process/event-derived comparisons are valid across branches (paths,
+coherence, variety, actor continuity — these derive purely from each
+branch's own events), but comparisons against absolute shared ERP
+aggregates are not (e.g. "current stock level," since multiple
+branches mutate the same underlying ledger concurrently).
 
 ## What `branch_run` requires
 
@@ -79,11 +79,11 @@ not `run_demo_episode` or `run_specialist_routine` — unless you pass
 ## Finding the matched/paired sets for a comparison
 
 A parent run can accumulate many branches over time, launched at
-different episodes for different reasons — not every pair of branches
-is a genuine matched/paired set. Two branches are only a real pair for
-V2 §44.3's paired comparison if they share the same `source_episode`
-(cloned from identical history up to that point, diverging only in the
-intervention itself).
+different episodes for different reasons. Not every pair of branches
+is a genuine matched/paired set — only branches sharing the same
+`source_episode` (cloned from identical history up to that point,
+diverging purely in the intervention) count as a real pair for V2
+§44.3's paired comparison.
 
 ```python
 from eorl_lab.api.runs import list_branch_groups
@@ -95,12 +95,10 @@ list_branch_groups("RUN-00050")
 # ]}}
 ```
 
-This is also the dedicated **Paired-Branch Inference**
-(`/app/eorl-paired-branch-inference`) page's backend — it exists so
-the researcher isn't left hunting through the generic run list for
-which runs are actually siblings of each other. The grouping here and
+This also backs the dedicated **Paired-Branch Inference**
+(`/app/eorl-paired-branch-inference`) page, so you aren't left hunting
+through the generic run list for which runs are actually siblings of
+each other. It groups by the same `source_episode` field that
 `eorl_lab.api.analysis.compare_groups`'s own `paired_by` sibling-branch
-verification (see
-[Statistical Analysis](../guide/statistical-analysis.md)) are based on
-the exact same `source_episode` field, so a group this function
-returns is guaranteed to pass that check.
+check verifies (see [Statistical Analysis](statistical-analysis.md)),
+so a group this function returns is guaranteed to pass that check.

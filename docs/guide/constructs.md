@@ -33,20 +33,20 @@ exist.
 | Formalization | — | Not implemented: no hard/soft-rule aggregation metric exists yet |
 | Information asymmetry | — | Not implemented, and no asymmetry condition is even built to measure yet (every actor sees the same public case fields) |
 | Hierarchy | — | Not implemented: no approval/assignment-depth metric exists yet |
-| Transactive memory | — | Not implemented *at all* — no expertise-belief modeling exists anywhere in the system (`shared` memory remains unbuilt) |
+| Transactive memory | — | Not implemented at all — no expertise-belief modeling exists anywhere in the system (`shared` memory remains unbuilt) |
 
-This table is intentionally blunt. The registry's value is in being a
-**truthful** map of theory-to-implementation as it stands today, not
-an aspirational one — see each construct's `validity_notes` field for
-the full explanation of what's missing and why.
+This table is intentionally blunt. The registry is only useful as a
+truthful map of theory-to-implementation as it stands today — see each
+construct's `validity_notes` field for the full explanation of what's
+missing and why.
 
 ## Linking an experiment to a construct
 
 `EORL Experiment.focal_construct` is an optional `Link` to `EORL
-Construct` — this is V2 §21's Theory Compiler's first researcher input
-("focal theoretical construct"), without the full structured wizard
-(still a later milestone). `validate_experiment` checks it resolves to
-a real construct if set.
+Construct`. `validate_experiment` checks it resolves to a real
+construct if set. This is also the first input the Theory Compiler
+wizard (see [Using the Front End](front-end.md)) asks for when
+scaffolding a new experiment from a theory.
 
 ## Full field reference
 

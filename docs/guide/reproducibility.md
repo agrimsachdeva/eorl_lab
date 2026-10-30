@@ -32,10 +32,10 @@ result = reproduce_run("RUN-00123")
 
 This launches a brand-new run from `RUN-00123`'s own recorded seed,
 architecture, and regime shift, then verifies the new run's
-scenario-case hashes and computed metrics match the original. Only
-works for runs launched via `run_architecture` / `launch_pilot` — older
-entrypoints (`run_demo_episode`, `run_specialist_routine`) don't carry
-enough configuration to replay, and this fails with a clear error
+scenario-case hashes and computed metrics match the original. It only
+works for runs launched via `run_architecture` / `launch_pilot` —
+older entrypoints (`run_demo_episode`, `run_specialist_routine`) don't
+carry enough configuration to replay, so it fails with a clear error
 rather than guessing at defaults.
 
 ## Why this works: determinism given (seed, episode, regime_shift)

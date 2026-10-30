@@ -56,9 +56,8 @@ prompt text. It checks, in order:
 
 ## The `finish_turn` tool
 
-Since SOTA Milestone 3, any actor (scripted or model-driven) can be
-given the `finish_turn` tool in its policy's `allowed_semantic_tools`.
-A model-driven actor needs this explicitly — it has no scripted
-"bundle `stop=True` onto my last real action" shortcut the way
-`DeterministicProvider` does, so it needs a real, authority-governed
-way to decide its turn is over.
+Any actor (scripted or model-driven) can be given the `finish_turn`
+tool in its policy's `allowed_semantic_tools`. A model-driven actor
+needs this explicitly: unlike `DeterministicProvider`, it has no
+scripted way to bundle `stop=True` onto its last real action, so it
+needs an authority-governed way to decide a turn is over.
