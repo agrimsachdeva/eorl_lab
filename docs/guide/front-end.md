@@ -77,6 +77,22 @@ phase-highlighted table calling out exactly which episode a regime
 shift triggers at (if the run used one) — shown here to the
 researcher, never to the agents themselves.
 
+## Power / Precision Planner (`/app/eorl-power-planner`)
+
+Two simple forms, both backed by a real Monte Carlo simulation of the
+exact test `compare_groups` runs: given a standardized effect and N,
+how much power do you have; given a target power, how many runs per
+group do you need. See [Statistical Analysis](../guide/statistical-analysis.md).
+
+## Robustness & Replication Diagnostics (`/app/eorl-robustness-diagnostics`)
+
+Pick a saved Analysis Plan and two groups of runs. Shows a line chart
+of the cumulative mean-difference estimate as runs 1..n accumulate
+(replication stability), and a forest plot of the full-sample estimate
+vs. re-estimating with each run excluded one at a time (robustness) —
+both diagnostics on an existing comparison, not new confirmatory
+results. See [Statistical Analysis](../guide/statistical-analysis.md).
+
 ## Reproducibility / Export (`/app/eorl-reproducibility`)
 
 - **Quick Export (JSON)** — a fast single-run dump.

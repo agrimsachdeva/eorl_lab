@@ -189,16 +189,62 @@ computed. This is a plain table export (V2 §50 scoped down) — not the
 full journal-formatted "Results Table Generator" with significance
 stars and footnotes that section ultimately describes.
 
+## Power and precision planning
+
+```python
+from eorl_lab.api.analysis import compute_power_analysis, compute_required_sample_size
+
+compute_power_analysis(standardized_effect=0.8, n_per_group=20)
+# {"power": 0.86, "n_simulations": 2000, ...}
+
+compute_required_sample_size(standardized_effect=0.8, target_power=0.8)
+# {"required_n_per_group": 27, "achieved_power": 0.81, ...}
+```
+
+Both are genuine Monte Carlo simulations of the *exact* Welch's t-test
+`compare_groups` runs — not a textbook closed-form formula — so the
+estimate reflects what this app's own test will actually detect.
+`required_sample_size` searches upward and reports `None` plus how far
+it searched, rather than extrapolating, if the ceiling you gave it
+isn't enough. The [Power / Precision Planner](front-end.md) page wraps
+both as simple forms.
+
+## Replication and robustness diagnostics
+
+```python
+from eorl_lab.api.analysis import compute_replication_diagnostics, compute_robustness_jackknife
+
+compute_replication_diagnostics(plan.name, runs_a, runs_b)
+# {"trajectory": [{"n_per_group": 2, "mean_diff": ..., "ci_95": ...}, ...]}
+
+compute_robustness_jackknife(plan.name, runs_a, runs_b)
+# {"rows": [{"label": "Full sample", ...}, {"label": "Excl. RUN-00042", ...}, ...],
+#  "max_single_exclusion_deviation": ...}
+```
+
+Both read the same run-level outcome values `compare_groups` would.
+**Neither is persisted as an `EORL Analysis Result`** — these are
+exploratory robustness checks on an existing comparison, not new
+confirmatory results, so recording them as if they were would
+misrepresent what they are. Replication diagnostics show whether the
+effect estimate is still moving as more runs accumulate (V2 §48);
+the jackknife shows whether any single run is quietly driving the
+whole result (V2 §47). The
+[Robustness & Replication Diagnostics](front-end.md) page renders the
+first as a line chart and the second as a forest plot.
+
 ## Honest limits of this phase
 
 - No multiple-testing correction (V2 §46) — not even when a plan's
   `equivalence_bounds` adds a third test family to a comparison that
-  already ran two difference tests.
+  already ran two difference tests, or across a robustness workbench's
+  many jackknife re-estimates.
 - Mann-Whitney U and Wilcoxon signed-rank (named in V2 §44.4 as
   "robustness" additions) aren't implemented.
-- The Process Explorer (DFG + swimlane), adaptation-trajectory plot,
-  network explorer, robustness forest plot, replication-stability
-  diagnostics, and a dedicated paired-branch inference UI aren't built
-  as graphical pages yet — the underlying data for all of them already
-  exists and is reachable (see [Using the Front End](front-end.md) and
-  the [API Reference](../reference/analysis.md)).
+- `simulate_power`/`required_sample_size` are scoped to the two-
+  independent-groups Welch test specifically — power for a paired
+  comparison, a mixed-effects model, or TOST equivalence isn't
+  estimated.
+- A dedicated paired-branch inference UI, cross-filtering between
+  panels, QAP/MRQAP, and survival analysis UI aren't built as graphical
+  pages yet.

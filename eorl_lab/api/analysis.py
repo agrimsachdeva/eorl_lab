@@ -342,3 +342,86 @@ def export_results_table(analysis_plan_name: str, fmt: str = "markdown") -> str:
 	for row in rows:
 		lines.append("| " + " | ".join(str(row.get(c)) for c in columns) + " |")
 	return "\n".join(lines)
+
+
+@frappe.whitelist()
+def compute_power_analysis(standardized_effect: float, n_per_group: int, alpha: float = 0.05, n_simulations: int = 2000) -> dict:
+	"""SOTA Milestone 8 (V2 section 49): Monte Carlo power estimate for
+	a Welch's t-test at a given standardized effect size and n -- "will
+	the test this app actually runs detect an effect of this size,
+	with this many runs per group." Simulation-based, not a closed-form
+	formula, so it reflects what compare_groups itself will do."""
+	frappe.only_for(["System Manager", "EORL Administrator", "EORL Researcher", "EORL Viewer"])
+	return stats.simulate_power(
+		float(standardized_effect), int(n_per_group), alpha=float(alpha), n_simulations=int(n_simulations)
+	)
+
+
+@frappe.whitelist()
+def compute_required_sample_size(standardized_effect: float, target_power: float = 0.8, alpha: float = 0.05, max_n: int = 300) -> dict:
+	"""SOTA Milestone 8 (V2 section 49): "how many independent runs per
+	group do I need" for a declared standardized effect size and target
+	power -- searches upward via compute_power_analysis's same
+	simulation rather than a closed-form formula."""
+	frappe.only_for(["System Manager", "EORL Administrator", "EORL Researcher", "EORL Viewer"])
+	return stats.required_sample_size(
+		float(standardized_effect), target_power=float(target_power), alpha=float(alpha), max_n=int(max_n)
+	)
+
+
+@frappe.whitelist()
+def compute_replication_diagnostics(analysis_plan_name: str, run_ids_group_a, run_ids_group_b) -> dict:
+	"""SOTA Milestone 8 (V2 section 48): 'running mean/effect estimate
+	as replications accumulate.' Reads the SAME run-level outcome
+	values compare_groups would (one value per run, via the plan's
+	outcome_metric), then shows how the Welch mean-difference estimate
+	moves as runs 1..n accumulate -- diagnostic, not a new confirmatory
+	result, so (deliberately) nothing is persisted as an
+	EORL Analysis Result here."""
+	frappe.only_for(["System Manager", "EORL Administrator", "EORL Researcher", "EORL Viewer"])
+	if isinstance(run_ids_group_a, str):
+		run_ids_group_a = frappe.parse_json(run_ids_group_a)
+	if isinstance(run_ids_group_b, str):
+		run_ids_group_b = frappe.parse_json(run_ids_group_b)
+
+	plan = frappe.get_doc("EORL Analysis Plan", analysis_plan_name)
+	values_a = [_run_level_metric(r, plan.outcome_metric) for r in run_ids_group_a]
+	values_b = [_run_level_metric(r, plan.outcome_metric) for r in run_ids_group_b]
+
+	trajectory = stats.replication_stability(values_a, values_b)
+	for point in trajectory:
+		point["ci_95"] = (_clean_float(point["ci_95"][0]), _clean_float(point["ci_95"][1]))
+		point["p_value"] = _clean_float(point["p_value"])
+	return {"analysis_plan": plan.name, "outcome_metric": plan.outcome_metric, "trajectory": trajectory}
+
+
+@frappe.whitelist()
+def compute_robustness_jackknife(analysis_plan_name: str, run_ids_group_a, run_ids_group_b) -> dict:
+	"""SOTA Milestone 8 (V2 section 47, robustness workbench -- scoped
+	to a leave-one-run-out sensitivity analysis, forest-plot-ready).
+	Same outcome values compare_groups would read; diagnostic only, not
+	persisted as an EORL Analysis Result."""
+	frappe.only_for(["System Manager", "EORL Administrator", "EORL Researcher", "EORL Viewer"])
+	if isinstance(run_ids_group_a, str):
+		run_ids_group_a = frappe.parse_json(run_ids_group_a)
+	if isinstance(run_ids_group_b, str):
+		run_ids_group_b = frappe.parse_json(run_ids_group_b)
+
+	plan = frappe.get_doc("EORL Analysis Plan", analysis_plan_name)
+	values_a = [_run_level_metric(r, plan.outcome_metric) for r in run_ids_group_a]
+	values_b = [_run_level_metric(r, plan.outcome_metric) for r in run_ids_group_b]
+
+	result = stats.jackknife_sensitivity(values_a, values_b)
+	for row in result["rows"]:
+		row["ci_95"] = (_clean_float(row["ci_95"][0]), _clean_float(row["ci_95"][1]))
+		row["p_value"] = _clean_float(row["p_value"])
+		# Replace the generic "Excl. A[i]" label with the actual run name excluded.
+		excluded = row["excluded"]
+		if excluded:
+			run_name = run_ids_group_a[excluded["index"]] if excluded["group"] == "a" else run_ids_group_b[excluded["index"]]
+			row["label"] = f"Excl. {run_name}"
+
+	return {
+		"analysis_plan": plan.name, "outcome_metric": plan.outcome_metric,
+		"rows": result["rows"], "max_single_exclusion_deviation": _clean_float(result["max_single_exclusion_deviation"]),
+	}

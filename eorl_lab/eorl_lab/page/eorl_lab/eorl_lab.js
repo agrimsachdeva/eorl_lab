@@ -16,6 +16,8 @@ frappe.pages['eorl-lab'].on_page_load = function (wrapper) {
 		{ title: 'Process Explorer', route: 'eorl-process-explorer' },
 		{ title: 'Network Explorer', route: 'eorl-network-explorer' },
 		{ title: 'Adaptation / Event-Study View', route: 'eorl-adaptation-view' },
+		{ title: 'Robustness & Replication Diagnostics', route: 'eorl-robustness-diagnostics' },
+		{ title: 'Power / Precision Planner', route: 'eorl-power-planner' },
 		{ title: 'Reproducibility / Export', route: 'eorl-reproducibility' },
 	];
 

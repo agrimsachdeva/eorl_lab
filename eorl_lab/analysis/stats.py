@@ -12,6 +12,7 @@ eorl_lab.api.analysis for where that guardrail is actually enforced).
 import warnings
 from typing import List, Optional
 
+import numpy as np
 from scipy import stats as scipy_stats
 
 
@@ -245,3 +246,117 @@ def mixed_effects_comparison(
 		"converged": bool(fit.converged),
 		"group_variance": float(fit.cov_re.iloc[0, 0]),
 	}
+
+
+# ---------------------------------------------------------------------------
+# Power / precision planning (V2 section 49): SOTA Milestone 8
+# ---------------------------------------------------------------------------
+
+def simulate_power(standardized_effect: float, n_per_group: int, alpha: float = 0.05, n_simulations: int = 2000, seed: Optional[int] = None) -> dict:
+	"""Monte Carlo power estimate for a Welch's t-test (V2 section 49):
+	repeatedly draws two normal samples of size `n_per_group`, one
+	shifted by `standardized_effect` standard deviations from the
+	other, runs welch_t_test, and reports the fraction of simulated
+	draws that reached significance at `alpha`. Deliberately simulation
+	-based rather than a closed-form formula -- it reuses the exact
+	same test function `compare_groups` actually runs, so the power
+	estimate is honest about what this app's own test will detect,
+	not a generic textbook formula that may not match."""
+	if n_per_group < 2:
+		raise ValueError("simulate_power needs n_per_group >= 2")
+	generator = np.random.default_rng(seed)
+
+	significant = 0
+	for _ in range(n_simulations):
+		a = generator.normal(loc=standardized_effect, scale=1.0, size=n_per_group)
+		b = generator.normal(loc=0.0, scale=1.0, size=n_per_group)
+		result = welch_t_test(list(a), list(b))
+		if result["p_value"] is not None and result["p_value"] < alpha:
+			significant += 1
+
+	return {
+		"standardized_effect": standardized_effect, "n_per_group": n_per_group, "alpha": alpha,
+		"n_simulations": n_simulations, "power": significant / n_simulations,
+	}
+
+
+def required_sample_size(standardized_effect: float, target_power: float = 0.8, alpha: float = 0.05, max_n: int = 300, n_simulations: int = 1000, seed: Optional[int] = None) -> dict:
+	"""Searches n_per_group upward (by small steps, then narrowing) via
+	simulate_power until the simulated power first reaches
+	`target_power`, or reports that `max_n` wasn't enough rather than
+	guessing past what was actually checked."""
+	step = 1
+	n = 2
+	last_power = 0.0
+	while n <= max_n:
+		result = simulate_power(standardized_effect, n, alpha=alpha, n_simulations=n_simulations, seed=seed)
+		last_power = result["power"]
+		if last_power >= target_power:
+			return {
+				"standardized_effect": standardized_effect, "target_power": target_power, "alpha": alpha,
+				"required_n_per_group": n, "achieved_power": last_power, "searched_up_to": n,
+			}
+		step = max(1, n // 4)
+		n += step
+
+	return {
+		"standardized_effect": standardized_effect, "target_power": target_power, "alpha": alpha,
+		"required_n_per_group": None, "achieved_power": last_power, "searched_up_to": max_n,
+	}
+
+
+# ---------------------------------------------------------------------------
+# Replication and robustness diagnostics (V2 sections 47, 48): SOTA
+# Milestone 8
+# ---------------------------------------------------------------------------
+
+def replication_stability(a: List[float], b: List[float]) -> list:
+	"""V2 section 48: 'running mean/effect estimate as replications
+	accumulate.' Recomputes the Welch mean difference and 95% CI using
+	only the first n runs of each group, for n = 2..len(group) -- shows
+	how much the estimate still moves as more independent replications
+	are added, rather than just reporting the final-N estimate as if it
+	were stable from the start."""
+	n_max = min(len(a), len(b))
+	if n_max < 2:
+		raise ValueError("replication_stability needs at least 2 runs per group")
+
+	trajectory = []
+	for n in range(2, n_max + 1):
+		result = welch_t_test(a[:n], b[:n])
+		trajectory.append({"n_per_group": n, "mean_diff": result["mean_diff"], "ci_95": result["ci_95"], "p_value": result["p_value"]})
+	return trajectory
+
+
+def jackknife_sensitivity(a: List[float], b: List[float]) -> dict:
+	"""V2 section 47 (robustness workbench): a leave-one-run-out
+	sensitivity analysis -- the full-sample Welch estimate, plus one
+	re-estimate per excluded run (from either group), so a single
+	unusual run's influence on the result is visible rather than
+	hidden inside an aggregate. Forest-plot-ready: every row is a
+	(label, mean_diff, ci_95) triple on the same scale as the baseline."""
+	if len(a) < 3 or len(b) < 3:
+		raise ValueError("jackknife_sensitivity needs at least 3 runs per group (2 remaining after exclusion)")
+
+	baseline = welch_t_test(a, b)
+	rows = [{"label": "Full sample", "excluded": None, "mean_diff": baseline["mean_diff"], "ci_95": baseline["ci_95"], "p_value": baseline["p_value"]}]
+
+	for i in range(len(a)):
+		reduced_a = a[:i] + a[i + 1:]
+		result = welch_t_test(reduced_a, b)
+		rows.append({
+			"label": f"Excl. A[{i}]", "excluded": {"group": "a", "index": i},
+			"mean_diff": result["mean_diff"], "ci_95": result["ci_95"], "p_value": result["p_value"],
+		})
+	for i in range(len(b)):
+		reduced_b = b[:i] + b[i + 1:]
+		result = welch_t_test(a, reduced_b)
+		rows.append({
+			"label": f"Excl. B[{i}]", "excluded": {"group": "b", "index": i},
+			"mean_diff": result["mean_diff"], "ci_95": result["ci_95"], "p_value": result["p_value"],
+		})
+
+	diffs = [row["mean_diff"] for row in rows[1:]]
+	max_deviation = max(abs(d - baseline["mean_diff"]) for d in diffs) if diffs else 0.0
+
+	return {"baseline": baseline, "rows": rows, "max_single_exclusion_deviation": max_deviation}

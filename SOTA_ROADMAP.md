@@ -1,7 +1,7 @@
 # EORL SOTA Roadmap
 
-**Status:** SOTA Milestone 7 delivered. Created 2026-10-29, updated 2026-10-30
-(SOTA M7).
+**Status:** SOTA Milestone 8 delivered. Created 2026-10-29, updated 2026-10-30
+(SOTA M8).
 
 This tracks progress against `docs/specs/EORL_SOTA_DEVELOPER_BUILD_SPEC_V2_ANALYTICS.md`
 ("V2"), a substantially larger specification than the one `PROGRESS.md`
@@ -880,21 +880,126 @@ third time.
 
 ---
 
-## 12. Next: SOTA Milestone 8 (remaining P1/P2 analytics) or beyond
+## 12. SOTA Milestone 8 — Delivered
 
-SOTA Milestones 1–7 closed the structural gaps, delivered counterfactual
+Power/precision planning and a robustness + replication diagnostics
+workbench (V2 §§47–49) — the three remaining P1 analytics items that
+build most directly on the existing scipy-backed inference engine
+rather than requiring a new domain (network permutation tests, survival
+analysis) or a large wizard UI.
+
+- **Power / Precision Planning** (V2 §49):
+  `eorl_lab.analysis.stats.simulate_power` — a genuine Monte Carlo
+  estimate (not a closed-form formula) of how often the *exact* Welch's
+  t-test `compare_groups` runs would detect a declared standardized
+  effect at a given N, by actually simulating and testing thousands of
+  synthetic draws. `required_sample_size` searches N upward until
+  that simulated power reaches a target, and — consistent with this
+  project's "fail loudly rather than guess" standard — reports
+  `required_n_per_group: None` plus how far it searched rather than
+  extrapolating past what it actually checked, when the ceiling isn't
+  enough. Verified against known behavior: a small effect
+  (Hedges' g=0.3) at n=10/group is correctly underpowered (~9%); a
+  large effect (g=1.5) is well-powered (~89–90%); the required N for a
+  textbook case (g=0.8, 80% power) came back as **27** — matching
+  standard published power tables for a two-sample t-test almost
+  exactly.
+- **Replication diagnostics** (V2 §48, "running mean/effect estimate
+  as replications accumulate"): `eorl_lab.analysis.stats
+  .replication_stability` recomputes the Welch mean-difference and CI
+  using only the first *n* runs of each group, for every *n* from 2 up
+  to the full sample — on a real worked example (asymmetric-variance
+  synthetic data) the CI visibly narrowed from `(0.49, 1.71)` at n=2 to
+  `(0.88, 1.19)` at n=8, showing the estimate actually stabilizing
+  rather than asserting it's stable from the first couple of runs.
+- **Robustness workbench** (V2 §47, scoped to leave-one-run-out
+  sensitivity — forest-plot-ready): `eorl_lab.analysis.stats
+  .jackknife_sensitivity` re-estimates the comparison with each run
+  excluded, one at a time, alongside the full-sample baseline, and
+  reports the largest single-exclusion shift — so one unusual run's
+  influence on a reported result is visible rather than buried inside
+  an aggregate.
+- **`eorl_lab.api.analysis`** gained four new whitelisted functions
+  (`compute_power_analysis`, `compute_required_sample_size`,
+  `compute_replication_diagnostics`, `compute_robustness_jackknife`).
+  The latter two read the exact same run-level outcome values
+  `compare_groups` would (one value per run, via the plan's
+  `outcome_metric`) — **deliberately not persisted as
+  `EORL Analysis Result` rows**: these are exploratory diagnostics on
+  an existing comparison, not new confirmatory results, so treating
+  them as such would misrepresent what they are.
+- **Two new front-end pages**: the **Power / Precision Planner**
+  (`/app/eorl-power-planner`, two simple forms: given-N→power, and
+  given-target-power→required-N) and **Robustness & Replication
+  Diagnostics** (`/app/eorl-robustness-diagnostics`: a real
+  `frappe.Chart` line of the cumulative mean-difference trajectory,
+  plus a forest plot — point + CI per row, baseline bolded — built
+  with plain positioned `<div>`s rather than a new charting dependency,
+  consistent with the Network Explorer's SVG approach in Milestone 7).
+- **Live-verified** on a real 2-architecture comparison
+  (`broad_autonomy` vs `specialist_handoff`, 6 runs each): both
+  diagnostics correctly reported the maximally-stable case they're
+  built to detect — the replication trajectory held at
+  `mean_diff = 0.2895` from n=2 runs onward (no narrowing left to show,
+  because the underlying architectural difference is itself
+  deterministic), and the jackknife's largest single-exclusion shift
+  was effectively zero (~10⁻¹⁶, floating-point noise) — exactly the
+  signature a genuinely robust, non-outlier-driven result should have.
+- 12 new tests (`test_eorl_power_and_robustness.py`) cover: power
+  estimates at three effect sizes behaving in the expected direction;
+  required-sample-size finding a value for a large effect and honestly
+  reporting "not reached" (not guessing) for an unreachable one;
+  replication trajectory length/shape and exact agreement with a plain
+  Welch test at the final N; jackknife structure, baseline agreement,
+  and its minimum-group-size guard; both new whitelisted wrappers; and
+  the two Frappe-integration diagnostics reading real run-level metric
+  values with human-readable, run-name-labeled exclusion rows.
+  **126/126 tests pass.**
+- **A real self-inflicted process lesson, caught and corrected before
+  it went anywhere**: the first full-suite run after this milestone's
+  changes showed 1 failure + 2 errors, including two tests from
+  earlier milestones with nothing to do with this one. Root cause
+  wasn't a regression — a live demo script was run via `bench execute`
+  *while* the full background test suite was still running against the
+  same site, and the two concurrent processes hit a genuine MySQL
+  naming-series deadlock (`QueryDeadlockError` on `tabSeries`), which
+  also appears to have disrupted the live Qwen test's document lookups.
+  A clean rerun with nothing else touching the site concurrently came
+  back 126/126 — confirming it was contention, not a defect. Worth
+  remembering for every future milestone: never run a second bench
+  process against the shared site while a background test run is in
+  flight.
+- **Deviations / honest limits:**
+  - A dedicated paired-branch inference UI, cross-filtering between
+    panels, QAP/MRQAP, survival analysis UI, and the Theory Compiler
+    wizard — all still named in V2 §55's remaining P1/P2 list — are
+    **not** built this milestone. Paired-branch inference's statistical
+    half has been real since Milestone 5; what's still missing is
+    dedicated UI for it.
+  - `simulate_power`/`required_sample_size` are scoped to the two-
+    independent-groups Welch test specifically — power for a paired
+    comparison, a mixed-effects model, or TOST equivalence is not
+    estimated.
+  - No multiple-testing correction is applied across a robustness
+    workbench's many jackknife re-estimates — unchanged from Milestone
+    6's honest gap on this point generally.
+
+---
+
+## 13. Next: SOTA Milestone 9 (remaining P1/P2) or beyond
+
+SOTA Milestones 1–8 closed the structural gaps, delivered counterfactual
 branching, replaced the all-deterministic run loop with a real,
 live-verified model provider and two new memory backends, generalized
 the Experiment Builder into a real factorial design with a
 theory-to-implementation Construct Registry and ablation marking,
 delivered a real, scipy-backed statistical inference engine (closing
 its own stated gap with a genuine mixed-effects model, equivalence
-testing, and publication table export), and shipped the Process
-Explorer, Network Explorer, and Adaptation/Event-Study graphical pages
-that two prior milestones had each deferred. The roadmap in section 4
-above (and V2 §55's remaining P1/P2 list) covers what comes next: a
-robustness forest plot, replication-stability diagnostics, a dedicated
-paired-branch inference UI, cross-filtering between panels, QAP/MRQAP,
-survival analysis UI, full power simulation, and the Theory Compiler
-wizard. Confirm before continuing further, same as before starting
-Milestones 1 through 7.
+testing, and publication table export), shipped the Process Explorer,
+Network Explorer, and Adaptation/Event-Study graphical pages, and added
+power/precision planning plus a robustness and replication diagnostics
+workbench. The roadmap in section 4 above (and V2 §55's remaining
+P1/P2 list) covers what comes next: a dedicated paired-branch inference
+UI, cross-filtering between panels, QAP/MRQAP, survival analysis UI,
+and the Theory Compiler wizard. Confirm before continuing further, same
+as before starting Milestones 1 through 8.
