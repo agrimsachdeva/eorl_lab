@@ -425,3 +425,26 @@ def compute_robustness_jackknife(analysis_plan_name: str, run_ids_group_a, run_i
 		"analysis_plan": plan.name, "outcome_metric": plan.outcome_metric,
 		"rows": result["rows"], "max_single_exclusion_deviation": _clean_float(result["max_single_exclusion_deviation"]),
 	}
+
+
+@frappe.whitelist()
+def compute_qap_comparison(run_a: str, run_b: str, n_permutations: int = 5000) -> dict:
+	"""SOTA Milestone 9 (V2 section 44.4: "QAP/MRQAP for relational
+	hypotheses... do not treat edges as independent observations"):
+	are two runs' agent-communication networks more similar than
+	chance? Diagnostic, not persisted as an EORL Analysis Result --
+	same scoping choice as compute_replication_diagnostics /
+	compute_robustness_jackknife above."""
+	frappe.only_for(["System Manager", "EORL Administrator", "EORL Researcher", "EORL Viewer"])
+	from eorl_lab.api.process import _run_level_metric_json
+
+	network_a = _run_level_metric_json(run_a, "communication_network")
+	network_b = _run_level_metric_json(run_b, "communication_network")
+	actors = sorted(
+		set(network_a) | {t for targets in network_a.values() for t in targets}
+		| set(network_b) | {t for targets in network_b.values() for t in targets}
+	)
+
+	result = stats.qap_correlation(network_a, network_b, actors, n_permutations=int(n_permutations))
+	result["run_a"], result["run_b"], result["actors"] = run_a, run_b, actors
+	return result

@@ -26,19 +26,46 @@ frappe.pages['eorl-network-explorer'].on_page_load = function (wrapper) {
 					<tbody class="eorl-network-rows"></tbody>
 				</table>
 			</div>
+
+			<h5 style="margin-top: 25px;">Compare Two Networks (QAP)</h5>
+			<p class="text-muted">
+				SOTA Milestone 9 (spec section 44.4). Are two runs' communication
+				networks more similar than chance? Significance comes from
+				permuting actor labels within one network, not an ordinary
+				correlation test -- edges aren't independent observations.
+			</p>
+			<div class="row" style="margin-bottom: 10px;">
+				<div class="col-sm-4">
+					<label class="text-muted">Run A</label>
+					<select class="form-control eorl-qap-run-a"><option value="">Select a run...</option></select>
+				</div>
+				<div class="col-sm-4">
+					<label class="text-muted">Run B</label>
+					<select class="form-control eorl-qap-run-b"><option value="">Select a run...</option></select>
+				</div>
+				<div class="col-sm-4"><label class="text-muted">&nbsp;</label><div>
+					<button class="btn btn-primary eorl-qap-compare-btn">Compare via QAP</button></div></div>
+			</div>
+			<div class="eorl-qap-result"></div>
 		</div>`
 	).appendTo(page.body);
 
 	const $runSelect = $body.find('.eorl-run-select');
 	const $svg = $body.find('.eorl-network-svg');
 	const $rows = $body.find('.eorl-network-rows');
+	const $qapRunA = $body.find('.eorl-qap-run-a');
+	const $qapRunB = $body.find('.eorl-qap-run-b');
+	const $qapResult = $body.find('.eorl-qap-result');
 
 	frappe.call({
 		method: 'eorl_lab.api.runs.list_runs',
 		args: { limit: 200 },
 		callback(r) {
 			(r.message || []).forEach((run) => {
-				$runSelect.append(`<option value="${run.name}">${run.name} (${run.status})</option>`);
+				const label = `${run.name} (${run.status})`;
+				$runSelect.append(`<option value="${run.name}">${label}</option>`);
+				$qapRunA.append(`<option value="${run.name}">${label}</option>`);
+				$qapRunB.append(`<option value="${run.name}">${label}</option>`);
 			});
 		},
 	});
@@ -89,6 +116,30 @@ frappe.pages['eorl-network-explorer'].on_page_load = function (wrapper) {
 				if (!data.edges.length) {
 					$rows.append('<tr><td colspan="3" class="text-muted">No agent-chosen messages in this run.</td></tr>');
 				}
+			},
+		});
+	});
+
+	$body.find('.eorl-qap-compare-btn').on('click', () => {
+		const runA = $qapRunA.val(), runB = $qapRunB.val();
+		if (!runA || !runB) {
+			frappe.msgprint('Select both runs.');
+			return;
+		}
+		frappe.call({
+			method: 'eorl_lab.api.analysis.compute_qap_comparison',
+			args: { run_a: runA, run_b: runB },
+			callback(r) {
+				const d = r.message;
+				const corr = d.observed_correlation === null ? 'undefined (a network has no edge variance)' : d.observed_correlation.toFixed(3);
+				const p = d.p_value === null ? 'n/a' : d.p_value.toFixed(4);
+				$qapResult.html(
+					`<div class="card" style="padding: 12px; max-width: 500px;">
+						<strong>Observed correlation: ${corr}</strong><br>
+						<strong>QAP p-value: ${p}</strong><br>
+						<span class="text-muted">${d.valid_permutations} valid permutations out of ${d.n_permutations}, ${d.n_actors} actors</span>
+					</div>`
+				);
 			},
 		});
 	});

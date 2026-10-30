@@ -1,5 +1,6 @@
 import frappe
 
+from eorl_lab.analysis import recovery, stats
 from eorl_lab.api import metrics as metrics_api
 
 
@@ -109,3 +110,45 @@ def get_adaptation_view_data(run: str) -> dict:
 		"episodes": [{"episode_number": e.episode_number, "phase": e.phase, "success": e.success} for e in episodes],
 		"regime_shift_trigger_episode": trigger_episode,
 	}
+
+
+@frappe.whitelist()
+def get_survival_analysis_data(run_ids, threshold_fraction: float = 0.9) -> dict:
+	"""SOTA Milestone 9 (V2 section 44.4: "Time to recovery / completion
+	-> Kaplan-Meier visualization"). For each run, computes
+	episodes_to_recover (eorl_lab.analysis.recovery) from its own real
+	post-shock performance -- a run that never recovers within its
+	observed episodes becomes a right-censored observation at its own
+	last post-shock episode, not a dropped data point; a run with no
+	regime shift at all (no post-shock episodes to measure recovery
+	over) is skipped rather than silently counted as instant
+	recovery."""
+	frappe.only_for(["System Manager", "EORL Administrator", "EORL Researcher", "EORL Viewer"])
+	if isinstance(run_ids, str):
+		run_ids = frappe.parse_json(run_ids)
+
+	durations, events, details = [], [], []
+	for run_name in run_ids:
+		_episode_events, _episode_paths, outcomes, phases = metrics_api._episode_data(run_name)
+		post_count = sum(1 for ph in phases if ph in recovery.POST_PHASES)
+		if post_count == 0:
+			continue
+		performance = [1.0 if o.get("success") else 0.0 for o in outcomes]
+		recovered_at = recovery.episodes_to_recover(performance, phases, float(threshold_fraction))
+		if recovered_at is not None:
+			duration, event_observed = recovered_at, 1
+		else:
+			duration, event_observed = post_count - 1, 0
+		durations.append(duration)
+		events.append(event_observed)
+		details.append({"run": run_name, "duration": duration, "event_observed": event_observed})
+
+	if len(durations) < 2:
+		frappe.throw(
+			"Need at least 2 runs with post-shock episodes (i.e. launched with a regime shift) "
+			"for a survival analysis."
+		)
+
+	result = stats.kaplan_meier_recovery(durations, events)
+	result["runs"] = details
+	return result

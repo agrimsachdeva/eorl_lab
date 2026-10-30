@@ -233,6 +233,47 @@ whole result (V2 §47). The
 [Robustness & Replication Diagnostics](front-end.md) page renders the
 first as a line chart and the second as a forest plot.
 
+## Network comparison (QAP)
+
+```python
+from eorl_lab.api.analysis import compute_qap_comparison
+
+compute_qap_comparison("RUN-00130", "RUN-00131")
+# {"observed_correlation": 1.0, "p_value": 0.044, "valid_permutations": 2000, "n_actors": 4, ...}
+```
+
+Are two runs' agent-communication networks more similar than chance?
+Significance comes from permuting one network's **actor labels**
+(never its own internal edge structure) and recomputing the
+correlation, not an ordinary i.i.d. significance test — edges that
+share an actor aren't independent observations of each other, so a
+standard correlation p-value would be wrong. **A real mathematical
+limit worth knowing**: with this system's typical 1–4 actors, the
+permutation space is tiny (4 actors → 4! = 24 relabelings), so the
+smallest p-value this test can ever report is 1/24 ≈ 0.042 — not a
+bug, just an honest consequence of comparing small networks. The
+[Network Explorer](front-end.md) page's second section wraps this.
+
+## Survival analysis (time to recovery)
+
+```python
+from eorl_lab.api.process import get_survival_analysis_data
+
+get_survival_analysis_data(["RUN-1", "RUN-2", "RUN-3", "RUN-4"])
+# {"survival_function": [{"time": 0.0, "survival_probability": 1.0}, ...],
+#  "median_recovery_time": 2.0, "n_events": 3, "n_censored": 1, "runs": [...]}
+```
+
+A Kaplan-Meier estimate of episodes-to-recovery after a regime shift,
+via each run's own `episodes_to_recover` value. A run that never
+recovers within its observed episodes becomes a **right-censored**
+observation at its own last post-shock episode — never a dropped data
+point, and never silently counted as "recovered." Uses `lifelines`,
+not a hand-rolled estimator — a real KM curve has enough edge cases
+(ties, censoring at the same time as an event) to be worth the
+dependency. The [Survival Analysis](front-end.md) page renders the
+curve and a per-run table.
+
 ## Honest limits of this phase
 
 - No multiple-testing correction (V2 §46) — not even when a plan's
@@ -245,6 +286,9 @@ first as a line chart and the second as a forest plot.
   independent-groups Welch test specifically — power for a paired
   comparison, a mixed-effects model, or TOST equivalence isn't
   estimated.
+- Only Kaplan-Meier is implemented; `lifelines` also supports Cox
+  proportional-hazards regression (recovery time as a function of
+  covariates like architecture), which isn't built.
 - A dedicated paired-branch inference UI, cross-filtering between
-  panels, QAP/MRQAP, and survival analysis UI aren't built as graphical
+  panels, and the Theory Compiler wizard aren't built as graphical
   pages yet.

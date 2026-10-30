@@ -1,0 +1,15 @@
+{
+ "doctype": "Page",
+ "module": "EORL Lab",
+ "name": "eorl-survival-analysis",
+ "page_name": "eorl-survival-analysis",
+ "title": "EORL Survival Analysis",
+ "standard": "Yes",
+ "system_page": 0,
+ "roles": [
+  {"role": "System Manager"},
+  {"role": "EORL Administrator"},
+  {"role": "EORL Researcher"},
+  {"role": "EORL Viewer"}
+ ]
+}

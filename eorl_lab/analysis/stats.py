@@ -360,3 +360,99 @@ def jackknife_sensitivity(a: List[float], b: List[float]) -> dict:
 	max_deviation = max(abs(d - baseline["mean_diff"]) for d in diffs) if diffs else 0.0
 
 	return {"baseline": baseline, "rows": rows, "max_single_exclusion_deviation": max_deviation}
+
+
+# ---------------------------------------------------------------------------
+# Network comparison via QAP (V2 section 44.4, "QAP/MRQAP for relational
+# hypotheses... do not treat edges as independent observations"):
+# SOTA Milestone 9
+# ---------------------------------------------------------------------------
+
+def _vectorize_network(network: dict, actor_order: List[str]) -> List[float]:
+	"""Every off-diagonal (sender, recipient) weight, in a fixed actor
+	order -- the flattened form a QAP correlation operates on."""
+	return [
+		network.get(actor_order[i], {}).get(actor_order[j], 0)
+		for i in range(len(actor_order)) for j in range(len(actor_order)) if i != j
+	]
+
+
+def qap_correlation(network_a: dict, network_b: dict, actors: List[str], n_permutations: int = 5000, seed: Optional[int] = None) -> dict:
+	"""Quadratic Assignment Procedure correlation test: are two
+	edge-weighted networks over the SAME actor set more similar than
+	chance? Ordinary correlation significance assumes independent
+	observations, which edges of the same network are not (an edge
+	sharing an actor with another edge is not independent of it) -- QAP
+	instead gets its null distribution by permuting one network's actor
+	LABELS (never its own internal edge structure) and recomputing the
+	correlation, exactly the "permutation-based network comparison" the
+	spec asks for instead of a standard i.i.d. significance test."""
+	n = len(actors)
+	if n < 3:
+		raise ValueError("qap_correlation needs at least 3 actors to have a meaningful permutation space")
+
+	vec_a = _vectorize_network(network_a, actors)
+	vec_b = _vectorize_network(network_b, actors)
+
+	observed_r = None
+	if len(set(vec_a)) > 1 and len(set(vec_b)) > 1:
+		observed_r = float(scipy_stats.pearsonr(vec_a, vec_b).statistic)
+
+	rng = np.random.default_rng(seed)
+	permuted_order = list(actors)
+	as_or_more_extreme, valid_permutations = 0, 0
+	for _ in range(n_permutations):
+		rng.shuffle(permuted_order)
+		vec_b_permuted = _vectorize_network(network_b, permuted_order)
+		if len(set(vec_b_permuted)) <= 1:
+			continue  # degenerate permutation: correlation undefined, not a valid draw
+		r = scipy_stats.pearsonr(vec_a, vec_b_permuted).statistic
+		valid_permutations += 1
+		if observed_r is not None and abs(r) >= abs(observed_r):
+			as_or_more_extreme += 1
+
+	p_value = (as_or_more_extreme / valid_permutations) if (observed_r is not None and valid_permutations) else None
+
+	return {
+		"test": "qap_correlation", "observed_correlation": observed_r, "p_value": p_value,
+		"n_permutations": n_permutations, "valid_permutations": valid_permutations, "n_actors": n,
+	}
+
+
+# ---------------------------------------------------------------------------
+# Survival analysis (V2 section 44.4, "time to recovery/completion ->
+# Kaplan-Meier"): SOTA Milestone 9
+# ---------------------------------------------------------------------------
+
+def kaplan_meier_recovery(durations: List[float], event_observed: List[int]) -> dict:
+	"""Kaplan-Meier survival estimate for time-to-recovery after a
+	regime shift. `event_observed[i] = 1` means run i's performance
+	recovered to baseline `durations[i]` episodes after the shock;
+	`0` means it was still unrecovered when observation ended
+	(right-censored at `durations[i]`). Uses `lifelines` -- a KM
+	estimator has enough real edge cases (tied event/censoring times,
+	the median being undefined when survival never drops below 0.5)
+	that re-deriving it by hand is not worth repeating this project's
+	earlier lesson about hand-rolling well-tested statistical
+	primitives."""
+	from lifelines import KaplanMeierFitter
+
+	if len(durations) < 2 or len(durations) != len(event_observed):
+		raise ValueError("kaplan_meier_recovery needs matching, non-empty durations and event_observed lists")
+
+	kmf = KaplanMeierFitter()
+	kmf.fit(durations, event_observed=event_observed)
+
+	survival_function = [
+		{"time": float(t), "survival_probability": float(s)}
+		for t, s in zip(kmf.survival_function_.index, kmf.survival_function_["KM_estimate"])
+	]
+	median = kmf.median_survival_time_
+
+	return {
+		"survival_function": survival_function,
+		"median_recovery_time": float(median) if median != float("inf") else None,
+		"n_runs": len(durations),
+		"n_events": int(sum(event_observed)),
+		"n_censored": int(len(event_observed) - sum(event_observed)),
+	}

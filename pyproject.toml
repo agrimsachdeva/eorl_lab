@@ -13,6 +13,7 @@ dependencies = [
     "numpy",
     "statsmodels",
     "pandas",
+    "lifelines",
 ]
 
 [build-system]

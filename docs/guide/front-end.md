@@ -69,6 +69,10 @@ step, each cell naming the actor and tool that executed it.
 Pick a run. Shows the agent-message network (who messaged whom, and
 how often) as a simple circular-layout SVG — edge thickness
 proportional to message count — plus a plain edge table underneath.
+A second section lets you pick two runs and compare their networks via
+QAP (are they more similar than chance, with significance from
+actor-label permutation, not an ordinary correlation test) — see
+[Statistical Analysis](../guide/statistical-analysis.md).
 
 ## Adaptation / Event-Study View (`/app/eorl-adaptation-view`)
 
@@ -92,6 +96,15 @@ of the cumulative mean-difference estimate as runs 1..n accumulate
 vs. re-estimating with each run excluded one at a time (robustness) —
 both diagnostics on an existing comparison, not new confirmatory
 results. See [Statistical Analysis](../guide/statistical-analysis.md).
+
+## Survival Analysis (`/app/eorl-survival-analysis`)
+
+Pick 2 or more runs launched with a regime shift. Shows a Kaplan-Meier
+curve (rendered as a line-chart approximation of the real step
+function) of time-to-recovery after the shift, plus a table of each
+run's own recovery time and whether it was right-censored (never
+recovered within its observed episodes). See
+[Statistical Analysis](../guide/statistical-analysis.md).
 
 ## Reproducibility / Export (`/app/eorl-reproducibility`)
 
