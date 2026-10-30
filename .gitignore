@@ -5,3 +5,6 @@
 tags
 eorl_lab/docs/current
 node_modules/
+# MkDocs build output
+/site/
+/_site/
