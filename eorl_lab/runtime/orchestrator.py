@@ -9,7 +9,7 @@ from eorl_lab.memory.factory import get_memory_store
 from eorl_lab.observability.context import ExperimentContext
 from eorl_lab.observability.events import emit_event
 from eorl_lab.providers.base import ModelRequest
-from eorl_lab.providers.deterministic import DeterministicProvider
+from eorl_lab.providers.factory import get_provider_for_agent
 from eorl_lab.runtime import authority
 from eorl_lab.scenarios.procurement import generate_case
 
@@ -110,10 +110,24 @@ def _run_actor_turn(
 		)
 		emit_event(
 			ctx, "model_request", actor_slot=agent.organizational_role, actor_instance_id=agent.name,
-			payload={"provider": "deterministic"},
+			payload={"provider": provider.__class__.__name__},
 		)
 
-		response = provider.generate(request)
+		try:
+			response = provider.generate(request)
+		except Exception as exc:
+			# SOTA Milestone 3: a real network-calling provider can fail in
+			# ways DeterministicProvider never could (timeout, malformed
+			# tool call, no tool call returned) -- that is an observable
+			# organizational-process failure, not a crash that should take
+			# the whole run down uncaught (spec sections 9/28, the same
+			# principle the tool-execution except block below already
+			# follows).
+			emit_event(
+				ctx, "error", actor_slot=agent.organizational_role, actor_instance_id=agent.name,
+				target_type="provider", success=False, payload={"error": str(exc)},
+			)
+			return scratch, False, str(exc)
 
 		emit_event(
 			ctx, "model_response", actor_slot=agent.organizational_role, actor_instance_id=agent.name,
@@ -364,7 +378,7 @@ def run_demo_episode(agent_template_name: str, seed: int = 42) -> dict:
 	emit_event(ctx, "episode_initialized", payload={"episode": episode.name, "case_id": case["case_id"]})
 	emit_event(ctx, "environment_observed", payload={"case": case})
 
-	provider = DeterministicProvider()
+	provider = get_provider_for_agent(agent)
 	scratch, success, failure_reason = _run_actor_turn(ctx, agent, provider, case, handoff={})
 
 	outcome = {
@@ -406,13 +420,20 @@ _SPECIALIST_SEQUENCE = [
 
 
 def _run_specialist_episode(
-	ctx: ExperimentContext, slot_map: dict, case: dict, provider, communication_policy: Optional[str] = None
+	ctx: ExperimentContext, slot_map: dict, case: dict, communication_policy: Optional[str] = None
 ) -> dict:
 	"""Architecture A (specialist/handoff, spec section 2.3): four
 	persistent actor slots, each restricted to its own tools, hand off
 	one full procure-to-pay routine with explicit, logged communication
 	between stages. `slot_map` maps the slot keys in _SPECIALIST_SEQUENCE
-	to EORL Agent Template names."""
+	to EORL Agent Template names.
+
+	SOTA Milestone 3: each slot resolves its OWN model provider from its
+	own EORL Agent Template's model_profile (get_provider_for_agent) --
+	a run is no longer forced to use one single provider instance for
+	every actor; a specialist_handoff run can genuinely mix a real
+	LLM-backed Purchasing Agent with deterministic specialists elsewhere
+	in the chain, or any other combination."""
 	routine_state: dict = {}
 	outcome = {"success": False, "stage_results": {}}
 
@@ -423,6 +444,7 @@ def _run_specialist_episode(
 		agent_template_name = slot_map[slot_key]
 		_record_task_assignment(ctx, slot_key, agent_template_name)
 		agent = frappe.get_doc("EORL Agent Template", agent_template_name)
+		provider = get_provider_for_agent(agent)
 
 		try:
 			handoff = handoff_fn(routine_state)
@@ -460,18 +482,22 @@ def _run_specialist_episode(
 
 
 def _run_broad_autonomy_episode(
-	ctx: ExperimentContext, slot_map: dict, case: dict, provider, communication_policy: Optional[str] = None
+	ctx: ExperimentContext, slot_map: dict, case: dict, communication_policy: Optional[str] = None
 ) -> dict:
 	"""Architecture B (broad autonomy, spec section 2.3): one actor
 	performs every stage of the same routine itself, with zero handoffs
 	-- "fewer mandatory handoffs; greater actor continuity" by
-	construction, using the same underlying decision rules as the
-	specialists (see providers.deterministic._choose_supplier) so the two
-	architectures are comparable rather than differing in what the
-	"right" decision even is."""
+	construction. When using DeterministicProvider this follows the same
+	underlying decision rules as the specialists (see
+	providers.deterministic._choose_supplier) so the two architectures
+	are comparable rather than differing in what the "right" decision
+	even is; a real model provider makes its own decisions instead.
+	SOTA Milestone 3: the provider is resolved from this slot's own
+	agent template (get_provider_for_agent), not forced by the caller."""
 	agent_template_name = slot_map["general_purchasing_agent"]
 	_record_task_assignment(ctx, "general_purchasing_agent", agent_template_name)
 	agent = frappe.get_doc("EORL Agent Template", agent_template_name)
+	provider = get_provider_for_agent(agent)
 
 	retrieved_memory = _retrieve_memory(ctx, agent, ctx.run_id)
 	scratch, success, failure_reason = _run_actor_turn(
@@ -577,7 +603,6 @@ def _run_episode_loop(
 	episode_outcomes = []
 	run_success = True
 	run_failure_reason = None
-	provider = DeterministicProvider()
 
 	for episode_number in range(start_episode, start_episode + episode_count):
 		episode = frappe.get_doc(
@@ -601,9 +626,9 @@ def _run_episode_loop(
 		emit_event(ctx, "environment_observed", payload={"case": case})
 
 		if coordination_mode == "specialist_handoff":
-			outcome = _run_specialist_episode(ctx, slot_map, case, provider, communication_policy=communication_policy)
+			outcome = _run_specialist_episode(ctx, slot_map, case, communication_policy=communication_policy)
 		elif coordination_mode == "broad_autonomy":
-			outcome = _run_broad_autonomy_episode(ctx, slot_map, case, provider, communication_policy=communication_policy)
+			outcome = _run_broad_autonomy_episode(ctx, slot_map, case, communication_policy=communication_policy)
 		else:
 			raise ValueError(f"Unknown coordination_mode: {coordination_mode!r}")
 

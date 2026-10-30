@@ -70,15 +70,33 @@ def create_purchase_order(
 	warehouse: str,
 	rate: float = None,
 	schedule_days: int = 7,
+	_case: dict = None,
 ) -> dict:
 	"""Consequential action (spec section 10). Creates -- but does not
 	submit -- a real ERPNext Purchase Order. Runs under the caller's
 	normal ERPNext permissions (no ignore_permissions), per section 9's
-	defense-in-depth requirement."""
+	defense-in-depth requirement.
+
+	SOTA Milestone 3 fix: when the caller doesn't supply `rate` (a real
+	agent -- scripted or model-driven -- has no legitimate way to know
+	the supplier's price; it's hidden ground truth, V2 section 2.4, not
+	something it could type in), this resolves it from the scenario's
+	own `latent_ground_truth[supplier].price` via the `_case` the
+	orchestrator injects (eorl_lab.runtime.orchestrator
+	._call_tool_with_context), the same way a real supplier-quoted price
+	would be looked up automatically rather than invented by the
+	purchasing agent. Resolving it here, server-side, means no caller --
+	today's scripted policy or any future provider -- can accidentally
+	leave the item's `rate` at 0 and corrupt ERPNext's own
+	last_purchase_rate fallback chain for every subsequent order on this
+	site (see SOTA_ROADMAP.md for the incident this fixes)."""
 	if not frappe.db.exists("Supplier", supplier):
 		frappe.throw(f"Unknown supplier: {supplier}")
 	if not frappe.db.exists("Item", item_code):
 		frappe.throw(f"Unknown item: {item_code}")
+
+	if rate is None and _case:
+		rate = (_case.get("latent_ground_truth") or {}).get(supplier, {}).get("price")
 
 	before_count = frappe.db.count("Purchase Order", {"supplier": supplier, "docstatus": 0})
 

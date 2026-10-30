@@ -1,5 +1,5 @@
 from eorl_lab.erp import buying, stock
-from eorl_lab.organization import communication
+from eorl_lab.organization import communication, control
 
 # Milestone 3 extended the registry to cover the full procure-to-pay
 # chain. SOTA Milestone 1 adds the ground-truth-driven inspection/
@@ -24,6 +24,9 @@ TOOL_REGISTRY = {
 	"inspect_received_goods": stock.inspect_received_goods,
 	"escalate_quality_exception": stock.escalate_quality_exception,
 	"message_agent": communication.message_agent,
+	# SOTA Milestone 3: a real model provider needs an explicit tool to
+	# signal "my turn is done" (see eorl_lab.organization.control.finish_turn).
+	"finish_turn": control.finish_turn,
 }
 
 

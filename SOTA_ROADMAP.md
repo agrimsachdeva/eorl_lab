@@ -1,7 +1,7 @@
 # EORL SOTA Roadmap
 
-**Status:** SOTA Milestone 2 delivered. Created 2026-10-29, updated 2026-10-29
-(SOTA M2).
+**Status:** SOTA Milestone 3 delivered. Created 2026-10-29, updated 2026-10-30
+(SOTA M3).
 
 This tracks progress against `docs/specs/EORL_SOTA_DEVELOPER_BUILD_SPEC_V2_ANALYTICS.md`
 ("V2"), a substantially larger specification than the one `PROGRESS.md`
@@ -335,11 +335,155 @@ history up to that point.
 
 ---
 
-## 7. Next: SOTA Milestone 3 (memory expansion + real LLM provider) or beyond
+## 7. SOTA Milestone 3 — Delivered
 
-SOTA Milestones 1 and 2 closed the structural gaps and delivered
-counterfactual branching. The roadmap in section 4 above still applies
-for what comes next (memory expansion/real LLM provider → Construct
-Registry/Experiment Builder expansion → analytics workbench phase 1).
-Confirm before continuing further, same as before starting Milestones 1
-and 2.
+Real model provider + memory expansion (V2 §8.1, §14). Until this
+milestone, **every single run in this entire project — all 8 original
+milestones and both prior SOTA milestones — actually ran on
+`DeterministicProvider`.** The provider abstraction existed since
+Milestone 2's vertical slice, but the run loop hard-coded one shared
+`DeterministicProvider()` instance for every actor regardless of what
+each agent template's own `model_profile` said. No real model had ever
+driven a single decision.
+
+- **Per-agent provider resolution.** New `eorl_lab.providers.factory
+  .get_provider_for_agent(agent)` reads the actor's OWN `EORL Model
+  Profile.provider` field and dispatches accordingly
+  (`deterministic` / `openai_compatible` / `anthropic` raises
+  `NotImplementedError`, not yet built). `_run_episode_loop`,
+  `_run_specialist_episode`, `_run_broad_autonomy_episode`, and
+  `run_demo_episode` no longer construct or thread through a single
+  shared provider — each actor slot resolves its own, so a
+  `specialist_handoff` run can genuinely mix a real LLM-backed role
+  with deterministic ones elsewhere in the same chain. Also fixed a
+  small but real logging bug this surfaced: the `model_request` event
+  hard-coded `payload={"provider": "deterministic"}` regardless of
+  which provider actually ran.
+- **`OpenAICompatibleProvider`** (`eorl_lab.providers.openai_compatible`):
+  speaks the OpenAI chat-completions wire format — the lowest common
+  denominator most self-hosted inference servers (vLLM, TGI, Ollama,
+  LM Studio) and OpenAI itself all speak — using real function/tool
+  calling (`tool_choice: "required"`), not JSON-in-prose parsing. Tool
+  schemas are built by introspecting each registered tool's own Python
+  signature, so the model only ever sees parameters a human operator
+  would see; the orchestrator's framework-injected parameters
+  (`_case`, `_sender_slot`, `_communication_policy`) are filtered out
+  by name, never exposed. **Ground truth is never in the prompt** (V2
+  §2.4): only the case's public fields, the actor's own accumulated
+  `scratch`, and retrieved memory are shown — verified directly by a
+  test that asserts the literal strings `latent_ground_truth`,
+  `quality_probability`, etc. never appear in the constructed messages.
+  New `finish_turn` tool (`eorl_lab.organization.control`) gives a
+  model-driven actor an explicit, authority-governed way to decide
+  *when* its turn is done — `DeterministicProvider` never needed this
+  (it bundles `stop=True` onto its own last scripted action), but a
+  model choosing actions turn-by-turn needs a real tool for it, subject
+  to the same `EORL Tool Policy` allow-list as everything else.
+- **Wired to a real, already-hosted model**, not a hypothetical one: a
+  Qwen3 model (`barrydeen/Qwen3.8-27B-AWQ-4bit`) served via vLLM on a
+  tailnet host, reachable from agrim's dev container. The API key lives
+  in `site_config.json` only (`qwen_api_key`, via `bench set-config`),
+  resolved through `EORL Model Profile.api_key_reference` — never
+  stored on the DocType itself, never committed, never logged.
+- **Live-verified end to end**, not just unit-tested: a real episode
+  (`RUN-00083`, seed 55) where the Qwen3 model, with zero scripted
+  guidance beyond its system prompt and tool schemas, autonomously
+  chose and executed the full sequence itself — `get_supplier_options`
+  → `create_purchase_order` → `submit_purchase_order` →
+  `create_purchase_receipt` → `submit_purchase_receipt` →
+  `inspect_received_goods` → `create_purchase_invoice` →
+  `submit_purchase_invoice` → `create_payment_entry` →
+  `submit_payment_entry` → `finish_turn` — producing a real, correctly
+  priced (`grand_total: 492.0`) ERPNext Purchase Order chain, end to
+  end, with no human or scripted logic choosing the sequence. 12 new
+  tests in `test_eorl_llm_provider.py` cover provider-factory dispatch
+  (deterministic/openai_compatible/unimplemented/disabled), the
+  ground-truth-never-in-prompt guarantee, tool-schema filtering, and
+  this exact live episode as an integration test hitting the real
+  external endpoint (not mocked, by design — consistent with every
+  other milestone's verification standard in this project). **69/69
+  tests pass** (52 existing + 11 unit + 1 live integration — Qwen tests
+  land in the same module as everything else since `finish_turn`
+  changed in the process).
+- **Real bugs found and fixed along the way, both load-bearing for any
+  real provider (scripted or model-driven), not just this one:**
+  - *Pricing.* The exact same fragile ERPNext `last_purchase_rate`
+    self-reference SOTA Milestone 2 patched around for
+    `DeterministicProvider` broke again the moment a real caller (the
+    model) legitimately didn't know to pass `rate` — it has no
+    legitimate way to know a hidden price. Fixed properly this time, at
+    the root: `eorl_lab.erp.buying.create_purchase_order` now resolves
+    `rate` from the scenario's own `latent_ground_truth[supplier].price`
+    via the already-injected `_case` parameter when the caller doesn't
+    supply one — server-side, transparent to whoever is calling,
+    exactly like a real supplier-quoted price would be. No caller,
+    scripted or model-driven, present or future, can trip this again.
+  - *Uncaught provider failures.* `_run_actor_turn` wrapped tool
+    execution in try/except (an organizational-process failure, not a
+    crash — spec §9/28) but never wrapped `provider.generate()` itself.
+    A real network-calling provider can fail in ways
+    `DeterministicProvider` never could (timeout, malformed tool call,
+    no tool call returned at all); now caught and logged as an `error`
+    event + episode failure, the same way a bad tool call already was.
+  - *Reasoning-budget starvation.* Qwen3 is a "thinking" model that can
+    spend its entire `max_tokens` budget reasoning and return
+    `finish_reason="length"` with no tool call at all. `EORL Model
+    Profile.reasoning_mode_if_supported = "disabled"` (an existing,
+    previously-unused field) now maps to the vLLM/Qwen3
+    `chat_template_kwargs: {"enable_thinking": false}` convention —
+    empirically, thinking *enabled* was actually more reliable for this
+    multi-step procedure (a quick empirical check with thinking
+    disabled made the model skip straight to `get_purchase_order` with
+    a hallucinated document name instead of creating one first), so the
+    live test runs with thinking on; the kill switch exists for
+    cheaper/faster single-tool-call use cases that don't need it.
+- **Semantic and procedural memory** (`eorl_lab.memory.semantic`,
+  `eorl_lab.memory.procedural`), the two V2 §14 backends named
+  alongside episodic but never built (`shared`/`vector` remain P2,
+  unchanged). Both are real `EORL Memory Record` rows, not a new
+  doctype — `EORL Memory Profile.local_backend` gained `semantic` and
+  `procedural` options.
+  - *Semantic* consolidates repeated observations about a stable
+    SUBJECT (e.g. a supplier) into exactly one record per (run, actor,
+    domain, subject), upserted rather than appended — `salience` holds
+    the running success rate. The per-episode `case_summary` the
+    orchestrator normally writes isn't a stable subject (every episode
+    has a different case id), so this derives the real subject from
+    the action string itself (`"ordered_from:X"` → subject `"supplier:X"`).
+  - *Procedural* holds a single reinforced habit per (run, actor,
+    domain): repeating the same successful action strengthens it
+    (`salience` climbs toward 1.0); a genuinely different action resets
+    it to a fresh, weak habit rather than blending the two.
+  - 9 new tests in `test_eorl_memory_expansion.py` verify consolidation,
+    distinct-subject separation, salience-ranked retrieval, habit
+    reinforcement, and habit reset-on-change — all via direct
+    `MemoryStore` calls, no LLM required (these are pure logic, not
+    dependent on which provider is writing to them).
+- **Deviations / honest limits:**
+  - `OpenAICompatibleProvider` takes only the FIRST tool call if a
+    model returns more than one in a single response (`tool_calls[0]`)
+    — consistent with the "call exactly one tool per turn" instruction
+    in the prompt, but not enforced beyond that instruction.
+  - Confidence is a fixed placeholder (`0.7`) on every
+    `OpenAICompatibleProvider` decision; this provider does not yet
+    elicit a calibrated confidence score from the model.
+  - Only one real provider engine is implemented
+    (`openai_compatible`); `anthropic` is a real, selectable
+    `EORL Model Profile.provider` option but still raises
+    `NotImplementedError` — unchanged from the gap this milestone was
+    scoped to close only for an OpenAI-compatible endpoint.
+  - `shared` and `vector` memory backends remain unimplemented (V2 §32.2
+    calls both P2); only `semantic` and `procedural` (P1) were built
+    this milestone.
+
+---
+
+## 8. Next: SOTA Milestone 4 (Construct Registry + Experiment Builder expansion) or beyond
+
+SOTA Milestones 1–3 closed the structural gaps, delivered counterfactual
+branching, and replaced the all-deterministic run loop with per-agent
+provider resolution plus a real, live-verified model provider and two
+new memory backends. The roadmap in section 4 above still applies for
+what comes next (Construct Registry/Experiment Builder expansion →
+analytics workbench phase 1). Confirm before continuing further, same
+as before starting Milestones 1, 2, and 3.

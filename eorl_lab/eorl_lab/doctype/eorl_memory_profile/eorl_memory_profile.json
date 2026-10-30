@@ -32,7 +32,7 @@
   {"fieldname": "profile_name", "fieldtype": "Data", "label": "Profile Name", "reqd": 1, "unique": 1},
   {"fieldname": "section_local", "fieldtype": "Section Break", "label": "Local Memory"},
   {"fieldname": "local_memory_enabled", "fieldtype": "Check", "label": "Local Memory Enabled", "default": "1"},
-  {"fieldname": "local_backend", "fieldtype": "Select", "label": "Local Backend", "options": "recent\nepisodic\nvector\nnone"},
+  {"fieldname": "local_backend", "fieldtype": "Select", "label": "Local Backend", "options": "recent\nepisodic\nsemantic\nprocedural\nvector\nnone"},
   {"fieldname": "local_retention_episodes", "fieldtype": "Int", "label": "Local Retention Episodes"},
   {"fieldname": "local_top_k", "fieldtype": "Int", "label": "Local Top K"},
   {"fieldname": "recency_weight", "fieldtype": "Float", "label": "Recency Weight"},
