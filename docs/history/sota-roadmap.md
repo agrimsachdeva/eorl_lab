@@ -1076,22 +1076,122 @@ QAP/MRQAP network comparison and Kaplan-Meier survival analysis (V2
 
 ---
 
-## 14. Next: SOTA Milestone 10 (remaining P1/P2) or beyond
+## 14. SOTA Milestone 10 — Delivered
 
-SOTA Milestones 1–9 closed the structural gaps, delivered counterfactual
-branching, replaced the all-deterministic run loop with a real,
-live-verified model provider and two new memory backends, generalized
-the Experiment Builder into a real factorial design with a
-theory-to-implementation Construct Registry and ablation marking,
-delivered a real, scipy-backed statistical inference engine (closing
-its own stated gap with a genuine mixed-effects model, equivalence
-testing, and publication table export), shipped the Process Explorer,
-Network Explorer, and Adaptation/Event-Study graphical pages, added
-power/precision planning plus a robustness and replication diagnostics
-workbench, and delivered QAP network comparison plus Kaplan-Meier
-survival analysis. The roadmap in section 4 above (and V2 §55's
-remaining P1/P2 list) covers what comes next: a dedicated paired-branch
-inference UI, cross-filtering between panels, and the Theory Compiler
-wizard — the last three items on the original V2 gap analysis. Confirm
-before continuing further, same as before starting Milestones 1
-through 9.
+The last three items on the original V2 gap analysis (§55's remaining
+P1/P2 list): a dedicated paired-branch inference UI, cross-filtering
+between panels, and the Theory Compiler wizard.
+
+- **Paired-branch inference UI**
+  (`/app/eorl-paired-branch-inference`, backed by the new
+  `eorl_lab.api.runs.list_branch_groups`): V2 §44.3's paired/matched
+  comparisons deserve their own picker rather than making the
+  researcher hunt through the generic Scientific Cockpit run list for
+  which runs are actually sibling branches of each other.
+  `list_branch_groups(parent_run)` groups every `EORL Branch` of a
+  parent run by its `source_episode` — branches sharing a
+  `source_episode` are exactly the genuine matched set
+  `eorl_lab.api.analysis.compare_groups`'s existing `paired_by`
+  verification will accept, so the UI's grouping and the analysis
+  engine's own sibling check now agree by construction rather than by
+  convention.
+- **Cross-filtering between panels — honestly scoped down to linked
+  navigation**: true live cross-filtering (one panel's selection
+  instantly re-rendering another panel in place) was not built. What
+  **is** real: the Process Explorer's swimlane, the Adaptation View's
+  phase table, and the Trace Explorer's own run/episode pickers now
+  share a single navigation contract via `frappe.route_options` — a
+  pre-existing mechanism this codebase already used for the Run
+  Monitor → Trace Explorer run-level link, extended here to also carry
+  a specific `episode` name. Clicking an episode number in either the
+  Process Explorer's swimlane or the Adaptation View's phase table
+  navigates straight to the Trace Explorer with that exact episode
+  pre-selected (`eorl_lab.api.process.get_adaptation_view_data` now
+  exposes each episode's real document name, not just its ordinal
+  number, so the link target is unambiguous). This is a one-click path
+  from "what happened in this episode's process" to "show me every
+  event," not simultaneous multi-panel filtering — the spec's own
+  framing of cross-filtering as a stretch goal is taken at face value
+  here rather than overclaimed.
+- **Theory Compiler wizard** (`/app/eorl-theory-compiler`, backed by
+  the new `eorl_lab.api.experiments.compile_theory`): V2 §21 is
+  explicit that this should be a **structured wizard**, not autonomous
+  theory generation — "do not attempt fully autonomous theory
+  generation" is the spec's own wording. The page collects the 8
+  researcher inputs §21 names (focal construct, theoretical
+  definition, proposed mechanism, manipulation, counterfactual
+  condition, outcomes, mediating process measures, boundary
+  conditions) and scaffolds a real `EORL Experiment` + `EORL Analysis
+  Plan` from them — never fabricating anything. `outcome_metric` is
+  only auto-filled when the chosen focal construct already has a real
+  `measurement_function` (today: Routine coherence →
+  `actor_continuity`, Adaptive repertoire's own metric); otherwise it
+  is left as an explicit `"UNSET -- choose a real ..."` placeholder,
+  never a guessed metric name that doesn't exist. A duplicate
+  experiment name is rejected outright rather than silently
+  overwritten.
+- **5 new tests**
+  (`test_eorl_paired_branch_ui_and_theory_compiler.py`) cover:
+  `list_branch_groups` grouping real sibling branches correctly (and
+  correctly separating a lone, unpaired branch into its own
+  single-member group) plus the empty-groups case for an unbranched
+  run; `compile_theory` with a focal construct that auto-fills
+  `outcome_metric`, without one (explicit placeholder, not a guess),
+  and its duplicate-name guard. **140/140 tests pass.**
+- **Live-verified** against two real branches of a real run sharing
+  `source_episode=2`: `list_branch_groups` returned exactly that pair
+  grouped together, correctly separate from an unrelated
+  `source_episode=1` branch created in the same run. `compile_theory`,
+  given a real theory about repetition and routine coherence, produced
+  a real `EORL Experiment` (status `draft`) and `EORL Analysis Plan`
+  with `outcome_metric` genuinely auto-resolved to `actor_continuity`
+  from the "Routine coherence" construct's own `measurement_function`
+  — not fabricated.
+- **No new DocTypes.** `EORL Branch`, `EORL Experiment`, and `EORL
+  Analysis Plan` already carried every field this milestone needed;
+  only two new Pages and two new whitelisted API functions were added.
+- **Deviations / honest limits:**
+  - Cross-filtering is linked navigation, not simultaneous multi-panel
+    filtering — see above. The spec itself frames this as a stretch
+    item, not a hard requirement.
+  - The Theory Compiler auto-fills `outcome_metric` for exactly the
+    constructs that already have a real measurement function
+    (currently 2 of the registry's constructs); every other construct
+    gets an honest placeholder rather than an invented metric name.
+  - Demo-only fixtures from this milestone's live verification (and
+    every prior milestone's, going back to Milestone 5) are
+    deliberately left in the system rather than deleted — confirmed by
+    checking the live site, where `EORL Architecture` rows named "Demo
+    Broad Autonomy," "M5 Demo Broad Autonomy," etc. are still present.
+    This research environment's own convention is additive history,
+    not a self-cleaning demo sandbox, so Milestone 10 follows the same
+    convention rather than introducing an inconsistent one-off cleanup.
+
+This closes every item named in the original V2 gap analysis across
+Milestones 1 through 10.
+
+---
+
+## 15. Next: beyond the original V2 gap analysis
+
+SOTA Milestones 1–10 closed every structural gap and every item on the
+original V2 gap analysis: counterfactual branching, a real
+live-verified model provider and two new memory backends, a
+generalized factorial Experiment Builder with a theory-to-
+implementation Construct Registry and ablation marking, a real
+scipy-backed statistical inference engine (mixed-effects models,
+equivalence testing, publication table export), the Process Explorer,
+Network Explorer, and Adaptation/Event-Study graphical pages,
+power/precision planning, robustness and replication diagnostics, QAP
+network comparison, Kaplan-Meier survival analysis, a dedicated
+paired-branch inference UI, cross-filtering-as-linked-navigation, and
+the Theory Compiler wizard. There is no remaining item from the
+original gap analysis to point to — what comes next is a genuinely
+open question (candidates include: Cox proportional-hazards regression
+alongside the existing Kaplan-Meier work, a real multi-panel
+cross-filtering implementation beyond linked navigation, an Agent
+Studio / graphical Architecture Designer to replace today's DocType-
+form-based composition, or revisiting V2 against whatever the
+researcher's own priorities are now that the documented gap list is
+exhausted). Confirm with the researcher before choosing a direction,
+rather than picking one unilaterally.

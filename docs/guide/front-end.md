@@ -32,7 +32,9 @@ filterable by event type, actor, and a "failures only" toggle. This is
 the direct window into everything the event log recorded: context
 built, model request/response, decision parsed, tool requested/
 authorized/denied, tool result, ERP state before/after, memory query/
-retrieval/write, messages sent/received.
+retrieval/write, messages sent/received. Arriving here via an episode
+link from the Process Explorer or the Adaptation View pre-selects that
+exact episode, not just the run.
 
 ## Compare Runs (`/app/eorl-compare-runs`)
 
@@ -62,7 +64,14 @@ episode in the run, as a count-sorted edge table (`from`, `to`, count,
 % of that node's outgoing total) using the same canonical
 `STAGE:tool_name` labels the process-mining metrics already use — plus
 a per-episode swimlane table, one row per episode and one column per
-step, each cell naming the actor and tool that executed it.
+step, each cell naming the actor and tool that executed it. Each
+episode number in the swimlane links straight into the Trace Explorer
+with that episode pre-selected — a one-click path from "what happened
+in this episode's process" to "show me every event." This is linked
+navigation between pages, not live multi-panel filtering (one panel's
+selection instantly re-rendering another panel in place) — see
+`SOTA_ROADMAP.md` Milestone 10 for the honestly-scoped-down story on
+cross-filtering.
 
 ## Network Explorer (`/app/eorl-network-explorer`)
 
@@ -79,7 +88,34 @@ actor-label permutation, not an ordinary correlation test) — see
 Pick a run. A real line chart of per-episode success, plus a
 phase-highlighted table calling out exactly which episode a regime
 shift triggers at (if the run used one) — shown here to the
-researcher, never to the agents themselves.
+researcher, never to the agents themselves. Each episode number in the
+table also links into the Trace Explorer with that episode
+pre-selected, same linked-navigation pattern as the Process Explorer's
+swimlane above.
+
+## Paired-Branch Inference (`/app/eorl-paired-branch-inference`)
+
+Pick a parent run and see its branches grouped by shared
+`source_episode` — the genuine matched/paired sets a counterfactual
+comparison (V2 §44.3) is allowed to treat as paired, rather than
+hunting for sibling branches in the generic run list. Each group's
+`child_run`s are exactly what
+`eorl_lab.api.analysis.compare_groups`'s own `paired_by` sibling check
+will accept, so the UI's grouping and the analysis engine's
+verification agree by construction.
+
+## Theory Compiler (`/app/eorl-theory-compiler`)
+
+A structured wizard (V2 §21) — explicitly **not** autonomous theory
+generation, per the spec's own wording. Fill in a focal theoretical
+construct plus the 7 other fields §21 names (theoretical definition,
+proposed mechanism, manipulation, counterfactual condition, outcomes,
+mediating process measures, boundary conditions) and it scaffolds a
+real `EORL Experiment` + `EORL Analysis Plan` from them.
+`outcome_metric` is only auto-filled when the chosen construct already
+has a real measurement function (today: Routine coherence, Adaptive
+repertoire); otherwise it's left as an explicit placeholder for you to
+fill in before launching — never a guessed metric name.
 
 ## Power / Precision Planner (`/app/eorl-power-planner`)
 

@@ -165,3 +165,95 @@ def launch_pilot(experiment_name: str, repetitions: int = None) -> dict:
 	exp.save()
 
 	return {"experiment": exp.name, "runs": launched}
+
+
+@frappe.whitelist()
+def compile_theory(
+	focal_construct: str = None,
+	theoretical_definition: str = "",
+	proposed_mechanism: str = "",
+	manipulation: str = "",
+	counterfactual_condition: str = "",
+	outcomes: str = "",
+	mediating_measures: str = "",
+	boundary_conditions: str = "",
+	experiment_name: str = None,
+) -> dict:
+	"""SOTA Milestone 10 (V2 section 21, "Theory-to-experiment workflow /
+	Theory Compiler"): a STRUCTURED WIZARD -- the spec's own words are
+	"do not attempt fully autonomous theory generation" -- that takes
+	the 8 researcher inputs section 21 names and scaffolds a real
+	`EORL Experiment` + `EORL Analysis Plan` from them, pre-filled with
+	everything that can be honestly derived from structured input
+	alone. It does NOT invent an architecture, a scenario, or a metric
+	the researcher didn't effectively name: `outcome_metric` is only
+	auto-filled when `focal_construct` resolves to an `EORL Construct`
+	that already has a real `measurement_function` (today, only
+	"Routine coherence" and "Adaptive repertoire" qualify); every other
+	construct leaves it as an explicit, visible placeholder rather than
+	guessing. The researcher still has to set `architecture_a` (and
+	`outcome_metric`, if left as the placeholder) before launching --
+	same as any other `EORL Experiment`."""
+	frappe.only_for(["System Manager", "EORL Administrator", "EORL Researcher"])
+
+	if not experiment_name:
+		experiment_name = f"Theory: {(theoretical_definition or focal_construct or 'Untitled')[:80]}"
+	if frappe.db.exists("EORL Experiment", experiment_name):
+		frappe.throw(f"An EORL Experiment named {experiment_name!r} already exists -- pick a different name.")
+
+	outcome_metric = None
+	if focal_construct and frappe.db.exists("EORL Construct", focal_construct):
+		construct = frappe.get_doc("EORL Construct", focal_construct)
+		if construct.measurement_function:
+			outcome_metric = construct.measurement_function.rsplit(".", 1)[-1]
+	outcome_metric_was_guessed = bool(outcome_metric)
+	if not outcome_metric:
+		outcome_metric = "UNSET -- choose a real eorl_lab.api.metrics.compute_run_metrics metric name"
+
+	notes_parts = []
+	if mediating_measures:
+		notes_parts.append(f"Mediating process measures: {mediating_measures}")
+	if boundary_conditions:
+		notes_parts.append(f"Boundary conditions: {boundary_conditions}")
+
+	experiment = frappe.get_doc(
+		{
+			"doctype": "EORL Experiment",
+			"experiment_name": experiment_name,
+			"status": "draft",
+			"research_question": theoretical_definition,
+			"theoretical_mechanism": proposed_mechanism,
+			"focal_construct": focal_construct,
+			"primary_outcomes": outcomes,
+			"notes": "\n".join(notes_parts),
+		}
+	).insert(ignore_permissions=True)
+
+	plan_name = f"{experiment_name} - Analysis Plan"
+	if frappe.db.exists("EORL Analysis Plan", plan_name):
+		plan_name = f"{plan_name} {frappe.generate_hash(length=4)}"
+	plan = frappe.get_doc(
+		{
+			"doctype": "EORL Analysis Plan",
+			"plan_name": plan_name,
+			"experiment": experiment.name,
+			"research_question": theoretical_definition,
+			"estimand": counterfactual_condition,
+			"outcome_metric": outcome_metric,
+			"contrast": manipulation,
+			"analysis_unit": "run",
+		}
+	).insert(ignore_permissions=True)
+
+	next_steps = ["Set architecture_a (and optionally architecture_b or factors) on the Experiment."]
+	next_steps.append(
+		"outcome_metric was auto-filled from the focal construct's measurement_function."
+		if outcome_metric_was_guessed
+		else "outcome_metric is an explicit placeholder -- set a real metric name on the Analysis Plan before launching."
+	)
+	next_steps.append("Launch via eorl_lab.api.experiments.launch_pilot once the Experiment's design is complete.")
+
+	return {
+		"experiment": experiment.name, "analysis_plan": plan.name,
+		"outcome_metric_guessed": outcome_metric_was_guessed, "next_steps": next_steps,
+	}

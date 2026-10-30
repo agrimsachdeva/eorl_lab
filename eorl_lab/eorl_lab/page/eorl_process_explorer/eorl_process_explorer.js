@@ -75,14 +75,27 @@ frappe.pages['eorl-process-explorer'].on_page_load = function (wrapper) {
 
 				$swimlaneRows.empty();
 				data.swimlane.forEach((ep) => {
-					let rowHtml = `<td>${ep.episode_number}</td><td>${ep.phase}</td><td>${ep.success ? 'yes' : 'no'}</td>`;
+					// SOTA Milestone 10: a linked drill-down into the
+					// Trace Explorer for this exact episode -- not live
+					// cross-filtering (each page stays independent), but
+					// a real one-click path from "what happened in this
+					// episode's process" to "show me every event".
+					let rowHtml = `<td><a href="#" class="eorl-episode-drilldown" data-episode="${ep.episode}">${ep.episode_number}</a></td><td>${ep.phase}</td><td>${ep.success ? 'yes' : 'no'}</td>`;
 					for (let i = 0; i < maxSteps; i++) {
 						const step = ep.steps[i];
 						rowHtml += step ? `<td title="${step.actor_slot}">${step.tool}</td>` : '<td></td>';
 					}
-					$swimlaneRows.append(`<tr>${rowHtml}</tr>`);
+					$swimlaneRows.append(`<tr data-run="${run}">${rowHtml}</tr>`);
 				});
 			},
 		});
+	});
+
+	$swimlaneRows.on('click', '.eorl-episode-drilldown', function (e) {
+		e.preventDefault();
+		const run = $(this).closest('tr').data('run');
+		const episode = $(this).data('episode');
+		frappe.route_options = { run, episode };
+		frappe.set_route('eorl-trace-explorer');
 	});
 };

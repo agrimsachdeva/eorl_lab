@@ -102,3 +102,26 @@ def mark_ablation(run: str, baseline_run: str, mechanism: str) -> dict:
 	emit_event(ctx, "run_marked_ablation", payload={"baseline_run": baseline_run, "mechanism": mechanism})
 
 	return {"run": run_doc.name, "is_ablation_of": baseline_run, "ablation_mechanism": mechanism}
+
+
+@frappe.whitelist()
+def list_branch_groups(parent_run: str) -> dict:
+	"""SOTA Milestone 10: backs the dedicated paired-branch inference UI
+	(V2 section 44.3's paired comparisons deserve their OWN picker, not
+	just the generic Scientific Cockpit run list, which gives no hint
+	of which runs are actually sibling branches of each other).
+	Groups every `EORL Branch` of `parent_run` by `source_episode` --
+	branches sharing a source_episode are the genuine paired/matched
+	set `eorl_lab.api.analysis.compare_groups`'s `paired_by` verification
+	will accept."""
+	branches = frappe.get_all(
+		"EORL Branch", filters={"parent_run": parent_run},
+		fields=["child_run", "source_episode", "intervention_description", "creation"],
+		order_by="source_episode asc, creation asc",
+	)
+	groups: dict = {}
+	for branch in branches:
+		groups.setdefault(branch.source_episode, []).append(
+			{"child_run": branch.child_run, "intervention_description": branch.intervention_description}
+		)
+	return {"parent_run": parent_run, "groups": groups}

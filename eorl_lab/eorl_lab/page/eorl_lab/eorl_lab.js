@@ -19,6 +19,8 @@ frappe.pages['eorl-lab'].on_page_load = function (wrapper) {
 		{ title: 'Robustness & Replication Diagnostics', route: 'eorl-robustness-diagnostics' },
 		{ title: 'Power / Precision Planner', route: 'eorl-power-planner' },
 		{ title: 'Survival Analysis', route: 'eorl-survival-analysis' },
+		{ title: 'Paired-Branch Inference', route: 'eorl-paired-branch-inference' },
+		{ title: 'Theory Compiler', route: 'eorl-theory-compiler' },
 		{ title: 'Reproducibility / Export', route: 'eorl-reproducibility' },
 	];
 

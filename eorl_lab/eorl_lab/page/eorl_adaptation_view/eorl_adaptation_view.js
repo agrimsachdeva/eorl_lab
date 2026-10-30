@@ -83,8 +83,8 @@ frappe.pages['eorl-adaptation-view'].on_page_load = function (wrapper) {
 					const isShock = data.regime_shift_trigger_episode && e.episode_number === data.regime_shift_trigger_episode;
 					const style = PHASE_COLORS[e.phase] || '';
 					$phaseRows.append(
-						`<tr style="${style}">
-							<td>${e.episode_number}${isShock ? ' <strong>(shift triggers here)</strong>' : ''}</td>
+						`<tr style="${style}" data-run="${run}">
+							<td><a href="#" class="eorl-episode-drilldown" data-episode="${e.episode}">${e.episode_number}</a>${isShock ? ' <strong>(shift triggers here)</strong>' : ''}</td>
 							<td>${e.phase}</td>
 							<td>${e.success ? 'yes' : 'no'}</td>
 						</tr>`
@@ -92,5 +92,13 @@ frappe.pages['eorl-adaptation-view'].on_page_load = function (wrapper) {
 				});
 			},
 		});
+	});
+
+	$phaseRows.on('click', '.eorl-episode-drilldown', function (ev) {
+		ev.preventDefault();
+		const run = $(this).closest('tr').data('run');
+		const episode = $(this).data('episode');
+		frappe.route_options = { run, episode };
+		frappe.set_route('eorl-trace-explorer');
 	});
 };

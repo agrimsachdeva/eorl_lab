@@ -75,3 +75,32 @@ otherwise), and must have an architecture name recoverable from its own
 snapshot — i.e. it was launched via `run_architecture` / `launch_pilot`,
 not `run_demo_episode` or `run_specialist_routine` — unless you pass
 `architecture_name` explicitly.
+
+## Finding the matched/paired sets for a comparison
+
+A parent run can accumulate many branches over time, launched at
+different episodes for different reasons — not every pair of branches
+is a genuine matched/paired set. Two branches are only a real pair for
+V2 §44.3's paired comparison if they share the same `source_episode`
+(cloned from identical history up to that point, diverging only in the
+intervention itself).
+
+```python
+from eorl_lab.api.runs import list_branch_groups
+
+list_branch_groups("RUN-00050")
+# {"parent_run": "RUN-00050", "groups": {5: [
+#     {"child_run": "RUN-00051", "intervention_description": "..."},
+#     {"child_run": "RUN-00052", "intervention_description": "..."},
+# ]}}
+```
+
+This is also the dedicated **Paired-Branch Inference**
+(`/app/eorl-paired-branch-inference`) page's backend — it exists so
+the researcher isn't left hunting through the generic run list for
+which runs are actually siblings of each other. The grouping here and
+`eorl_lab.api.analysis.compare_groups`'s own `paired_by` sibling-branch
+verification (see
+[Statistical Analysis](../guide/statistical-analysis.md)) are based on
+the exact same `source_episode` field, so a group this function
+returns is guaranteed to pass that check.

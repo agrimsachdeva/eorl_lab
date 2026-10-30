@@ -50,7 +50,7 @@ frappe.pages['eorl-trace-explorer'].on_page_load = function (wrapper) {
 	const $failedFilter = $body.find('.eorl-filter-failed');
 	const $eventRows = $body.find('.eorl-event-rows');
 
-	function load_runs(preselect_run) {
+	function load_runs(preselect_run, preselect_episode) {
 		frappe.call({
 			method: 'eorl_lab.api.runs.list_runs',
 			args: { limit: 100 },
@@ -60,13 +60,13 @@ frappe.pages['eorl-trace-explorer'].on_page_load = function (wrapper) {
 				});
 				if (preselect_run) {
 					$runSelect.val(preselect_run);
-					load_episodes(preselect_run);
+					load_episodes(preselect_run, preselect_episode);
 				}
 			},
 		});
 	}
 
-	function load_episodes(run) {
+	function load_episodes(run, preselect_episode) {
 		state.run = run;
 		$episodeSelect.empty().append('<option value="">Select an episode...</option>');
 		frappe.call({
@@ -79,12 +79,17 @@ frappe.pages['eorl-trace-explorer'].on_page_load = function (wrapper) {
 						`<option value="${ep.name}">#${ep.episode_number} - ${ep.phase} - ${ep.status}</option>`
 					);
 				});
-				if (episodes.length) {
-					$episodeSelect.val(episodes[0].name);
-					load_trace(episodes[0].name);
-				} else {
+				if (!episodes.length) {
 					$eventRows.empty();
+					return;
 				}
+				// SOTA Milestone 10: a linked drill-down from Process
+				// Explorer / Adaptation View can pre-select a SPECIFIC
+				// episode (by name), not just default to the first one.
+				const target = preselect_episode && episodes.find((ep) => ep.name === preselect_episode);
+				const toLoad = target ? target.name : episodes[0].name;
+				$episodeSelect.val(toLoad);
+				load_trace(toLoad);
 			},
 		});
 	}
@@ -157,29 +162,45 @@ frappe.pages['eorl-trace-explorer'].on_page_load = function (wrapper) {
 		});
 	}
 
-	$runSelect.on('change', () => load_episodes($runSelect.val()));
+	$runSelect.on('change', () => {
+		const pendingEpisode = $episodeSelect.data('eorl-pending-episode');
+		$episodeSelect.removeData('eorl-pending-episode');
+		load_episodes($runSelect.val(), pendingEpisode);
+	});
 	$episodeSelect.on('change', () => load_trace($episodeSelect.val()));
 	$typeFilter.on('change', render_rows);
 	$actorFilter.on('change', render_rows);
 	$failedFilter.on('change', render_rows);
 
-	load_runs(frappe.route_options && frappe.route_options.run);
+	load_runs(
+		frappe.route_options && frappe.route_options.run,
+		frappe.route_options && frappe.route_options.episode
+	);
 	frappe.route_options = null;
 };
 
 frappe.pages['eorl-trace-explorer'].on_page_show = function (wrapper) {
 	// on_page_load only fires once per page instance in Frappe's SPA;
-	// this re-applies a run selected from the Run Monitor on every
-	// subsequent visit, not just the first.
+	// this re-applies a run (and, since SOTA Milestone 10, an episode)
+	// selected from the Run Monitor / Process Explorer / Adaptation
+	// View on every subsequent visit, not just the first.
 	if (frappe.route_options && frappe.route_options.run) {
 		const run = frappe.route_options.run;
+		const episode = frappe.route_options.episode;
 		frappe.route_options = null;
 		const $runSelect = $(wrapper).find('.eorl-run-select');
-		if ($runSelect.length && $runSelect.val() !== run) {
+		const $episodeSelect = $(wrapper).find('.eorl-episode-select');
+		if ($runSelect.length) {
 			if (!$runSelect.find(`option[value="${run}"]`).length) {
 				$runSelect.append(`<option value="${run}">${run}</option>`);
 			}
-			$runSelect.val(run).trigger('change');
+			$runSelect.val(run);
+			// Call the page's own load_episodes directly (with the
+			// episode to preselect) rather than firing a plain 'change'
+			// event, which would drop the episode argument -- the
+			// change handler bound below only forwards the run.
+			$episodeSelect.data('eorl-pending-episode', episode);
+			$runSelect.trigger('change');
 		}
 	}
 };

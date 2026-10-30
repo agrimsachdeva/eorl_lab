@@ -98,7 +98,7 @@ def get_adaptation_view_data(run: str) -> dict:
 	launched with one, so the front end can mark the shock point on a
 	trajectory chart rather than the caller having to infer it."""
 	episodes = frappe.get_all(
-		"EORL Episode", filters={"run": run}, fields=["episode_number", "phase", "success"],
+		"EORL Episode", filters={"run": run}, fields=["name", "episode_number", "phase", "success"],
 		order_by="episode_number asc",
 	)
 	run_doc = frappe.get_doc("EORL Run", run)
@@ -107,7 +107,10 @@ def get_adaptation_view_data(run: str) -> dict:
 
 	return {
 		"run": run,
-		"episodes": [{"episode_number": e.episode_number, "phase": e.phase, "success": e.success} for e in episodes],
+		"episodes": [
+			{"episode": e.name, "episode_number": e.episode_number, "phase": e.phase, "success": e.success}
+			for e in episodes
+		],
 		"regime_shift_trigger_episode": trigger_episode,
 	}
 

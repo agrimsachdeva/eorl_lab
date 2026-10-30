@@ -18,7 +18,24 @@ compare — see [Architectures & Agents](architectures-and-agents.md).
 At minimum you need one; a factorial design needs as many as you have
 levels for your "architecture" factor.
 
-## 3. Create the `EORL Experiment`
+## 3. Create the `EORL Experiment` (or scaffold one from a theory)
+
+If you're starting from a filled-in theory rather than from the
+`EORL Experiment` form directly, the **Theory Compiler**
+(`/app/eorl-theory-compiler`, backed by
+`eorl_lab.api.experiments.compile_theory`) is a structured wizard —
+explicitly not autonomous theory generation (V2 §21's own wording) —
+that takes your theoretical definition, proposed mechanism,
+manipulation, counterfactual condition, outcomes, mediating process
+measures, and boundary conditions, and scaffolds the `EORL Experiment`
+below plus a matching `EORL Analysis Plan` in one step. If your focal
+construct already has a real measurement function (Routine coherence,
+Adaptive repertoire), `outcome_metric` on the generated plan is
+auto-filled from it; otherwise it's left as an explicit placeholder —
+never a guessed metric name. Either way you land back at step 4 below
+with a real Experiment to keep configuring.
+
+Otherwise, create the `EORL Experiment` directly:
 
 ```python
 exp = frappe.get_doc({
