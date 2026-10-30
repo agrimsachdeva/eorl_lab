@@ -16,3 +16,5 @@ testable completely outside a running site.
 ::: eorl_lab.analysis.recovery
 
 ::: eorl_lab.analysis.networks
+
+::: eorl_lab.analysis.stats

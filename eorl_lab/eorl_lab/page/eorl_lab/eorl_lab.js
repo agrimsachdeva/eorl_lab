@@ -12,6 +12,7 @@ frappe.pages['eorl-lab'].on_page_load = function (wrapper) {
 		{ title: 'Run Monitor', route: 'eorl-run-monitor' },
 		{ title: 'Trace Explorer', route: 'eorl-trace-explorer' },
 		{ title: 'Compare Runs', route: 'eorl-compare-runs' },
+		{ title: 'Scientific Cockpit', route: 'eorl-scientific-cockpit' },
 		{ title: 'Reproducibility / Export', route: 'eorl-reproducibility' },
 	];
 
@@ -24,6 +25,8 @@ frappe.pages['eorl-lab'].on_page_load = function (wrapper) {
 		'EORL Architecture',
 		'EORL Regime Shift',
 		'EORL Experiment',
+		'EORL Construct',
+		'EORL Analysis Plan',
 	];
 
 	const $body = $(

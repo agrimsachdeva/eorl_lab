@@ -33,6 +33,7 @@ GROUPS = {
 	],
 	"Science: Experiments & Constructs": [
 		"eorl_experiment", "eorl_experiment_factor", "eorl_construct",
+		"eorl_analysis_plan", "eorl_analysis_result",
 	],
 }
 

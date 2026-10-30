@@ -95,6 +95,12 @@ def compute_run_metrics(run_name: str) -> dict:
 		computed[name] = value
 		_save_metric(run_name, name, value)
 
+	# Outcome (SOTA Milestone 5: a named, persisted run-level metric --
+	# previously only computed ad hoc inline by compare_runs below, not
+	# available for eorl_lab.api.analysis.compare_groups to read as an
+	# EORL Analysis Plan.outcome_metric).
+	record("success_rate", (sum(performance) / len(performance)) if performance else None)
+
 	# Routine structure
 	record("unique_sequence_count", sequence.unique_sequence_count(episode_paths))
 	record("sequence_entropy", sequence.sequence_entropy(episode_paths))

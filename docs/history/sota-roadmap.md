@@ -1,7 +1,7 @@
 # EORL SOTA Roadmap
 
-**Status:** SOTA Milestone 4 delivered. Created 2026-10-29, updated 2026-10-30
-(SOTA M4).
+**Status:** SOTA Milestone 5 delivered. Created 2026-10-29, updated 2026-10-30
+(SOTA M5).
 
 This tracks progress against `docs/specs/EORL_SOTA_DEVELOPER_BUILD_SPEC_V2_ANALYTICS.md`
 ("V2"), a substantially larger specification than the one `PROGRESS.md`
@@ -580,15 +580,137 @@ Construct Registry + Experiment Builder expansion (V2 §20, §28.7).
 
 ---
 
-## 9. Next: SOTA Milestone 5 (analytics workbench, phase 1) or beyond
+## 9. SOTA Milestone 5 — Delivered
 
-SOTA Milestones 1–4 closed the structural gaps, delivered counterfactual
+Analytics workbench, phase 1 (V2 §44, §55's P0 slice).
+
+- **A real statistics engine** (`eorl_lab.analysis.stats`), thin
+  wrappers around `scipy.stats` rather than hand-rolled numerics.
+  **Deviation from how this milestone started:** the first pass
+  hand-rolled Student's t CDF/PPF and a permutation test from scratch
+  in pure Python (to avoid adding a dependency). The t-distribution
+  implementation was verified correct against known values, but the
+  hand-rolled permutation test had a real, reproducible bug — it
+  converged to p≈0.048 against an exact-enumeration reference value of
+  p≈0.056 on a classic textbook dataset, confirmed via brute-force
+  enumeration of all C(12,6)=924 relabelings. Switched to `scipy.stats`
+  instead of continuing to debug it, which immediately matched the
+  exact-enumeration value. `scipy` (and `numpy`) are now real,
+  declared dependencies (`pyproject.toml`) — there was no good reason
+  to keep reinventing well-tested numerical primitives.
+  - `welch_t_test`, `permutation_test`, `hedges_g` for two independent
+    conditions (V2 §44.4); `paired_t_test`, `paired_permutation_test`,
+    `paired_hedges_g` for matched/paired conditions (V2 §44.3).
+  - `welch_t_test` reproduces the classic unequal-variance textbook
+    example exactly (t=1.959, df=7.03, p=0.0908 — also matches what R's
+    `t.test()` or calling scipy directly report for the same data).
+- **`EORL Analysis Plan`** (V2 §44.1): every field the spec names,
+  including several explicitly marked as **reserved/not read yet** in
+  their own field descriptions (`formula`, `covariates`,
+  `multiple_testing_family`, `equivalence_bounds`,
+  `bootstrap_iterations` — all P1, section 44.4's model-based test
+  families and section 45.1's equivalence testing) rather than quietly
+  ignored. `analysis_unit` (default `"run"`) is the field the
+  independence guardrail actually reads.
+- **The independence guardrail is enforced, not documented** (V2 §44.2,
+  visualization acceptance test 54.3): `eorl_lab.api.analysis
+  .compare_groups` — the only entrypoint in this app that runs a
+  between-condition statistical comparison — refuses outright to run
+  when `analysis_plan.analysis_unit != "run"`. There is no honest
+  "require explicit hierarchical specification" fallback built yet (no
+  mixed-effects/GEE model exists — that's P1), so this takes
+  54.3's **"block the analysis"** branch, not the alternative one. Every
+  outcome value `compare_groups` reads is one persisted, run-level
+  `EORL Metric` row (computing it via `compute_run_metrics` if not
+  already there) — never a per-episode value.
+- **"Recommend, never silently select" is structural, not a UI
+  affordance** (V2 §44.4): `compare_groups` always computes AND
+  persists **both** the parametric and the distribution-free test for
+  whichever pairing mode applies (`welch_t` + `permutation`, or
+  `paired_t` + `paired_permutation`) — there is no code path that
+  returns only one.
+- **Paired-branch verification, not trust** (V2 §44.3): setting
+  `EORL Analysis Plan.paired_by` doesn't just change which test runs —
+  `compare_groups` *verifies* every `(group_a[i], group_b[i])` pair
+  actually shares the same `parent_run` and `branch_point_episode`
+  (SOTA Milestone 2's lineage fields) before treating them as matched,
+  and throws rather than silently falling back to an independent-groups
+  test if a claimed pair isn't a genuine sibling-branch pair.
+- **`EORL Analysis Result`** (V2 §52): one row per test family per
+  comparison, naming the exact run IDs in both groups, N independent
+  runs *and* N episodes (never conflated), the metric version, the
+  `scipy` version that computed it, and the full raw result as JSON —
+  "a user should be able to click any reported result and see exactly
+  which runs generated it" is satisfied via ordinary Frappe Link-field
+  navigation (consistent with how Architectures/Agent Templates are
+  still composed via plain DocType forms rather than a bespoke wizard),
+  not a custom provenance viewer.
+- **Live-verified with a real, substantively meaningful comparison**:
+  5 `broad_autonomy` runs vs. 5 `specialist_handoff` runs (3 episodes
+  each), comparing `actor_continuity`. Broad autonomy's continuity is
+  **exactly 1.0 for every run** (architecturally guaranteed — one actor
+  does everything), specialist handoff's mean was 0.713 with real
+  variance across runs. Welch's t: t=99.0, df=4, **p=6.2×10⁻⁸**;
+  permutation test (5000 resamples): **p=0.0079** — two structurally
+  different test families agreeing the effect is real. Both results
+  landed as real `EORL Analysis Result` rows with correct provenance.
+- **Scientific Cockpit** (V2 §38, scoped to its KPI-card core): a new
+  desk page (`/app/eorl-scientific-cockpit`) — pick a saved Analysis
+  Plan and two groups of runs, compare, see independent-N /
+  episode-N / means / standardized effect as KPI cards, both test
+  families' p-values and CIs in a table, each with a click-through link
+  to its full `EORL Analysis Result` record.
+- **Added a `success_rate` run-level metric** to
+  `eorl_lab.api.metrics.compute_run_metrics` — previously only computed
+  ad hoc, inline, by the Compare Runs page; now a real persisted named
+  metric any Analysis Plan can target as its `outcome_metric`.
+- **A real platform edge case found and fixed**: `scipy`'s Welch's
+  t-test legitimately returns `nan` when both groups have zero
+  variance (e.g. every run in both groups succeeded every episode) —
+  MySQL rejects `NaN`/`Inf` outright for a Float column. Fixed with a
+  `_clean_float` helper that converts them to `NULL` before the
+  `EORL Analysis Result` is saved — `NULL` ("undefined") is also the
+  scientifically correct representation here, not a fabricated number.
+- **Deviations / honest limits, stated plainly:**
+  - **Process Explorer (DFG + episode swimlane), adaptation trajectory,
+    and run-level distribution comparison as dedicated graphical pages
+    are NOT built this milestone.** The underlying data for all three
+    already exists and is reachable today (`directly_follows_graph` is
+    a real persisted `EORL Metric`; per-episode outcome/phase data is
+    on `EORL Episode`; distributions are the `values_a`/`values_b` any
+    `compare_groups` call already computes) — only the bespoke
+    graphical/cross-filtering UI wrapping them is deferred, consistent
+    with this project's established pattern of shipping real data and
+    plain DocType/table access before a bespoke visual designer (Agent
+    Studio, Architecture Designer, and Scenario Studio are deferred the
+    same way).
+  - Mann-Whitney U and Wilcoxon signed-rank (both named in V2 §44.4 as
+    "robustness" additions, not the P0 bullet list itself) are not
+    implemented.
+  - No multiple-testing correction (V2 §46) and no TOST equivalence
+    testing (V2 §45.1) — both explicitly P1/P2.
+  - No mixed-effects/GEE/clustered model exists, so `analysis_unit`
+    has exactly one honest setting (`"run"`) today; `"episode"` is a
+    real selectable option that `compare_groups` always refuses.
+  - Cross-filtering between panels (visualization acceptance test 54.1)
+    doesn't apply yet — there is only one panel (the Cockpit's own
+    compare form), not yet multiple linked visualizations.
+
+---
+
+## 10. Next: SOTA Milestone 6 (analytics workbench, phase 2 / P1) or beyond
+
+SOTA Milestones 1–5 closed the structural gaps, delivered counterfactual
 branching, replaced the all-deterministic run loop with a real,
-live-verified model provider and two new memory backends, and
-generalized the Experiment Builder into a real factorial design with a
-theory-to-implementation Construct Registry and ablation marking. The
-roadmap in section 4 above still applies for what comes next (analytics
-workbench phase 1, V2 §55's P0 slice: Scientific Cockpit, Process
-Explorer, independence-guardrail Analysis Plan, Welch/permutation test).
-Confirm before continuing further, same as before starting Milestones 1
-through 4.
+live-verified model provider and two new memory backends, generalized
+the Experiment Builder into a real factorial design with a
+theory-to-implementation Construct Registry and ablation marking, and
+delivered a real, scipy-backed statistical inference engine with an
+enforced independence guardrail and trace-linked result provenance. The
+roadmap in section 4 above (and V2 §55's P1 list) covers what comes
+next: mixed-effects longitudinal models, paired-branch inference UI,
+equivalence tests, the event-study/adaptation-trajectory view, the
+Process Explorer / network explorer graphical pages, a robustness
+forest plot, replication-stability diagnostics, and publication table
+export. Confirm before continuing further, same as before starting
+Milestones 1 through 5.

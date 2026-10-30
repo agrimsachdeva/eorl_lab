@@ -44,6 +44,17 @@ trace. A "Compute & Persist Full Metric Set" action runs the complete
 metric suite (including post-shock adaptation metrics) for one run at
 a time.
 
+## Scientific Cockpit (`/app/eorl-scientific-cockpit`)
+
+Pick a saved [EORL Analysis Plan](../guide/statistical-analysis.md) and
+two groups of runs, then Compare. Shows KPI cards (independent-run
+count vs. episode count, means, standardized effect) and a table of
+both computed test families' p-values and 95% CIs, each linking
+straight to its full `EORL Analysis Result` record for complete
+provenance. Refuses to run if the plan's `analysis_unit` isn't `"run"`
+(the independence guardrail — see
+[Statistical Analysis](../guide/statistical-analysis.md)).
+
 ## Reproducibility / Export (`/app/eorl-reproducibility`)
 
 - **Quick Export (JSON)** — a fast single-run dump.

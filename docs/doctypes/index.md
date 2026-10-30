@@ -38,6 +38,8 @@ Generated directly from each DocType's JSON definition (`docs/gen_doctype_docs.p
 - [EORL Experiment](eorl_experiment.md)
 - [EORL Experiment Factor](eorl_experiment_factor.md)
 - [EORL Construct](eorl_construct.md)
+- [EORL Analysis Plan](eorl_analysis_plan.md)
+- [EORL Analysis Result](eorl_analysis_result.md)
 
 ## Other
 

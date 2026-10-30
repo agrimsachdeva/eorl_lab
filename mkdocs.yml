@@ -41,6 +41,7 @@ nav:
       - Counterfactual Branching: guide/branching.md
       - Constructs & Theory: guide/constructs.md
       - Using the Front End: guide/front-end.md
+      - Statistical Analysis: guide/statistical-analysis.md
       - Reproducibility & Export: guide/reproducibility.md
   - DocType Reference: doctypes/index.md
   - API Reference:
