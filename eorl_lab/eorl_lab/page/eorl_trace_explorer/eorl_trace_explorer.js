@@ -1,3 +1,5 @@
+const OUTCOME_EVENT_TYPES = new Set(['tool_result', 'tool_authorized', 'tool_denied', 'error', 'episode_outcome', 'soft_rule_violation']);
+
 frappe.pages['eorl-trace-explorer'].on_page_load = function (wrapper) {
 	const page = frappe.ui.make_app_page({
 		parent: wrapper,
@@ -124,7 +126,7 @@ frappe.pages['eorl-trace-explorer'].on_page_load = function (wrapper) {
 		const filtered = state.events.filter((e) => {
 			if (type_filter && e.event_type !== type_filter) return false;
 			if (actor_filter && e.actor_slot !== actor_filter) return false;
-			if (failed_only && e.success !== 0) return false;
+			if (failed_only && !(OUTCOME_EVENT_TYPES.has(e.event_type) && e.success === 0)) return false;
 			return true;
 		});
 
@@ -142,8 +144,12 @@ frappe.pages['eorl-trace-explorer'].on_page_load = function (wrapper) {
 				payload = e.payload_json || '';
 			}
 			const short_payload = payload.length > 120 ? payload.slice(0, 120) + '...' : payload;
-			const ok_icon = e.success === 1 ? '✓' : e.success === 0 ? '✗' : '';
-			const row_class = e.success === 0 ? 'text-danger' : '';
+			// EORL Event.success is a Check field, so events that carry no
+			// outcome at all are stored as 0. Only mark success or failure
+			// on event types where the flag means something.
+			const has_outcome = OUTCOME_EVENT_TYPES.has(e.event_type);
+			const ok_icon = !has_outcome ? '' : e.success === 1 ? '✓' : '✗';
+			const row_class = has_outcome && e.success === 0 ? 'text-danger' : '';
 
 			const $row = $(
 				`<tr class="${row_class}">

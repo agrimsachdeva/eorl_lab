@@ -9,6 +9,7 @@ def export_run_bundle(run: str) -> dict:
 	"""Milestone 6's raw-data JSON export, kept for the Reproducibility
 	page's lightweight "quick export" option. download_full_bundle below
 	is the Milestone 8 artifact spec section 7.9 actually asks for."""
+	frappe.only_for(["System Manager", "EORL Administrator", "EORL Researcher", "EORL Viewer"])
 	run_doc = frappe.get_doc("EORL Run", run)
 	episodes = frappe.get_all("EORL Episode", filters={"run": run}, fields=["*"], order_by="episode_number asc")
 	events = frappe.get_all("EORL Event", filters={"run": run}, fields=["*"], order_by="sequence_no asc")

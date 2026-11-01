@@ -1,5 +1,6 @@
 import inspect
 import json
+import time
 
 import frappe
 import requests
@@ -81,6 +82,7 @@ class OpenAICompatibleProvider(ModelProvider):
 		if not model_profile.model_name:
 			frappe.throw(f"EORL Model Profile {model_profile.name!r}: model_name is required for provider 'openai_compatible'.")
 		self.base_url = model_profile.base_url.rstrip("/")
+		self.last_retry_count = 0
 		self.model_name = model_profile.model_name
 		self.api_key = frappe.conf.get(model_profile.api_key_reference) if model_profile.api_key_reference else None
 		if not self.api_key:
@@ -122,7 +124,9 @@ class OpenAICompatibleProvider(ModelProvider):
 			# much more reliable, lower-latency tool selection.
 			body["chat_template_kwargs"] = {"enable_thinking": False}
 
+		started = time.monotonic()
 		payload = self._post_with_retries(body)
+		latency_ms = (time.monotonic() - started) * 1000.0
 
 		choice = payload["choices"][0]
 		message = choice["message"]
@@ -161,13 +165,16 @@ class OpenAICompatibleProvider(ModelProvider):
 			resolved_model=payload.get("model") or self.model_name,
 			raw_text=message.get("content"),
 			token_counts=payload.get("usage") or {},
+			latency_ms=latency_ms,
 			provider_request_id=payload.get("id"),
+			retry_count=self.last_retry_count,
 		)
 
 	def _post_with_retries(self, body: dict) -> dict:
 		last_exc = None
 		attempts = max(1, self.profile.max_retries or 1)
-		for _attempt in range(attempts):
+		for attempt in range(attempts):
+			self.last_retry_count = attempt
 			try:
 				resp = requests.post(
 					f"{self.base_url}/chat/completions",

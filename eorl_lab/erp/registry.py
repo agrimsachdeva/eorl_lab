@@ -1,4 +1,4 @@
-from eorl_lab.erp import buying, stock
+from eorl_lab.erp import buying, selling, stock
 from eorl_lab.organization import communication, control
 
 # Milestone 3 extended the registry to cover the full procure-to-pay
@@ -27,6 +27,18 @@ TOOL_REGISTRY = {
 	# SOTA Milestone 3: a real model provider needs an explicit tool to
 	# signal "my turn is done" (see eorl_lab.organization.control.finish_turn).
 	"finish_turn": control.finish_turn,
+	# Second routine, order-to-cash (submission-day plan section 2.1).
+	"get_customer_order": selling.get_customer_order,
+	"create_sales_order": selling.create_sales_order,
+	"get_sales_order": selling.get_sales_order,
+	"submit_sales_order": selling.submit_sales_order,
+	"create_delivery_note": selling.create_delivery_note,
+	"submit_delivery_note": selling.submit_delivery_note,
+	"get_delivery_status": selling.get_delivery_status,
+	"create_sales_invoice": selling.create_sales_invoice,
+	"submit_sales_invoice": selling.submit_sales_invoice,
+	"create_customer_payment": selling.create_customer_payment,
+	"submit_customer_payment": selling.submit_customer_payment,
 }
 
 

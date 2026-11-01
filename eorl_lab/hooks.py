@@ -10,7 +10,7 @@ app_license = "mit"
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/eorl_lab/css/eorl_lab.css"
-# app_include_js = "/assets/eorl_lab/js/eorl_lab.js"
+app_include_js = "/assets/eorl_lab/js/eorl_export.js"
 
 # include js, css files in header of web template
 # web_include_css = "/assets/eorl_lab/css/eorl_lab.css"

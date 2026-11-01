@@ -28,30 +28,156 @@
   "request_headers_json"
  ],
  "fields": [
-  {"fieldname": "profile_name", "fieldtype": "Data", "label": "Profile Name", "reqd": 1, "unique": 1},
-  {"fieldname": "provider", "fieldtype": "Select", "label": "Provider", "options": "openai_compatible\nanthropic\ndeterministic", "reqd": 1},
-  {"fieldname": "enabled", "fieldtype": "Check", "label": "Enabled", "default": "1"},
-  {"fieldname": "section_connection", "fieldtype": "Section Break", "label": "Connection"},
-  {"fieldname": "base_url", "fieldtype": "Data", "label": "Base URL"},
-  {"fieldname": "api_key_reference", "fieldtype": "Data", "label": "API Key Reference", "description": "Key/reference only; resolve the actual secret from site config or environment."},
-  {"fieldname": "model_name", "fieldtype": "Data", "label": "Model Name"},
-  {"fieldname": "section_params", "fieldtype": "Section Break", "label": "Request Parameters"},
-  {"fieldname": "temperature", "fieldtype": "Float", "label": "Temperature"},
-  {"fieldname": "top_p", "fieldtype": "Float", "label": "Top P"},
-  {"fieldname": "max_tokens", "fieldtype": "Int", "label": "Max Tokens"},
-  {"fieldname": "timeout_seconds", "fieldtype": "Int", "label": "Timeout (s)", "default": "120"},
-  {"fieldname": "max_retries", "fieldtype": "Int", "label": "Max Retries", "default": "3"},
-  {"fieldname": "seed_if_supported", "fieldtype": "Int", "label": "Seed (if supported)"},
-  {"fieldname": "section_modes", "fieldtype": "Section Break", "label": "Modes"},
-  {"fieldname": "tool_call_mode", "fieldtype": "Data", "label": "Tool Call Mode"},
-  {"fieldname": "structured_output_mode", "fieldtype": "Data", "label": "Structured Output Mode"},
-  {"fieldname": "reasoning_mode_if_supported", "fieldtype": "Data", "label": "Reasoning Mode (if supported)"},
-  {"fieldname": "request_headers_json", "fieldtype": "Code", "label": "Request Headers (JSON)", "options": "JSON"}
+  {
+   "fieldname": "profile_name",
+   "fieldtype": "Data",
+   "label": "Profile Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "provider",
+   "fieldtype": "Select",
+   "label": "Provider",
+   "options": "openai_compatible\nanthropic\ndeterministic\nbounded_rational",
+   "reqd": 1
+  },
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled",
+   "default": "1"
+  },
+  {
+   "fieldname": "section_connection",
+   "fieldtype": "Section Break",
+   "label": "Connection"
+  },
+  {
+   "fieldname": "base_url",
+   "fieldtype": "Data",
+   "label": "Base URL",
+   "permlevel": 1
+  },
+  {
+   "fieldname": "api_key_reference",
+   "fieldtype": "Data",
+   "label": "API Key Reference",
+   "description": "Key/reference only; resolve the actual secret from site config or environment.",
+   "permlevel": 1
+  },
+  {
+   "fieldname": "model_name",
+   "fieldtype": "Data",
+   "label": "Model Name"
+  },
+  {
+   "fieldname": "section_params",
+   "fieldtype": "Section Break",
+   "label": "Request Parameters"
+  },
+  {
+   "fieldname": "temperature",
+   "fieldtype": "Float",
+   "label": "Temperature"
+  },
+  {
+   "fieldname": "top_p",
+   "fieldtype": "Float",
+   "label": "Top P"
+  },
+  {
+   "fieldname": "max_tokens",
+   "fieldtype": "Int",
+   "label": "Max Tokens"
+  },
+  {
+   "fieldname": "timeout_seconds",
+   "fieldtype": "Int",
+   "label": "Timeout (s)",
+   "default": "120"
+  },
+  {
+   "fieldname": "max_retries",
+   "fieldtype": "Int",
+   "label": "Max Retries",
+   "default": "3"
+  },
+  {
+   "fieldname": "seed_if_supported",
+   "fieldtype": "Int",
+   "label": "Seed (if supported)"
+  },
+  {
+   "fieldname": "section_modes",
+   "fieldtype": "Section Break",
+   "label": "Modes"
+  },
+  {
+   "fieldname": "tool_call_mode",
+   "fieldtype": "Data",
+   "label": "Tool Call Mode"
+  },
+  {
+   "fieldname": "structured_output_mode",
+   "fieldtype": "Data",
+   "label": "Structured Output Mode"
+  },
+  {
+   "fieldname": "reasoning_mode_if_supported",
+   "fieldtype": "Data",
+   "label": "Reasoning Mode (if supported)"
+  },
+  {
+   "fieldname": "request_headers_json",
+   "fieldtype": "Code",
+   "label": "Request Headers (JSON)",
+   "options": "JSON"
+  }
  ],
  "permissions": [
-  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
-  {"role": "EORL Administrator", "read": 1, "write": 1, "create": 1, "delete": 1},
-  {"role": "EORL Researcher", "read": 1, "write": 1, "create": 1, "delete": 0},
-  {"role": "EORL Viewer", "read": 1}
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "EORL Administrator",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "EORL Researcher",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 0
+  },
+  {
+   "role": "EORL Viewer",
+   "read": 1
+  },
+  {
+   "role": "System Manager",
+   "permlevel": 1,
+   "read": 1,
+   "write": 1
+  },
+  {
+   "role": "EORL Administrator",
+   "permlevel": 1,
+   "read": 1,
+   "write": 1
+  },
+  {
+   "role": "EORL Researcher",
+   "permlevel": 1,
+   "read": 1,
+   "write": 1
+  }
  ]
 }

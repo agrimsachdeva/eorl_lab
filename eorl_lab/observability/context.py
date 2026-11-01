@@ -24,6 +24,15 @@ class ExperimentContext:
 	parent_span_id: Optional[str] = None
 	correlation_id: Optional[str] = None
 	sequence_no: int = 0
+	# Submission-day additions. `telemetry` accumulates per-run model-call
+	# counts, tokens, latency and retries (plan section 23).
+	# `expected_denial_codes` lets a run declare which authority denials
+	# are part of its design (plan section 25).
+	telemetry: dict = field(default_factory=lambda: {
+		"model_calls": 0, "input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "retries": 0, "latency_ms": 0.0,
+	})
+	expected_denial_codes: tuple = ()
+	engine_override: Optional[str] = None
 
 	def __post_init__(self):
 		if not self.correlation_id:

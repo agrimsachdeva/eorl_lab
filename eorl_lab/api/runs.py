@@ -18,6 +18,7 @@ def launch_demo_episode(agent_template: str, seed: int = 42):
 @frappe.whitelist()
 def list_runs(limit: int = 50) -> list:
 	"""Backs the Run Monitor (spec section 7.6)."""
+	frappe.only_for(["System Manager", "EORL Administrator", "EORL Researcher", "EORL Viewer"])
 	return frappe.get_all(
 		"EORL Run",
 		fields=[
@@ -31,6 +32,7 @@ def list_runs(limit: int = 50) -> list:
 
 @frappe.whitelist()
 def get_run_detail(run: str) -> dict:
+	frappe.only_for(["System Manager", "EORL Administrator", "EORL Researcher", "EORL Viewer"])
 	run_doc = frappe.get_doc("EORL Run", run)
 	episodes = frappe.get_all(
 		"EORL Episode",
@@ -72,6 +74,7 @@ def get_branch_history(run: str) -> list:
 	full branch lineage (spec section 17's acceptance test: two branches
 	must share byte-equivalent history through their common branch
 	point)."""
+	frappe.only_for(["System Manager", "EORL Administrator", "EORL Researcher", "EORL Viewer"])
 	return get_full_branch_history(run)
 
 
@@ -114,6 +117,7 @@ def list_branch_groups(parent_run: str) -> dict:
 	branches sharing a source_episode are the genuine paired/matched
 	set `eorl_lab.api.analysis.compare_groups`'s `paired_by` verification
 	will accept."""
+	frappe.only_for(["System Manager", "EORL Administrator", "EORL Researcher", "EORL Viewer"])
 	branches = frappe.get_all(
 		"EORL Branch", filters={"parent_run": parent_run},
 		fields=["child_run", "source_episode", "intervention_description", "creation"],

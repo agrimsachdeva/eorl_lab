@@ -5,6 +5,8 @@
 | `architecture_name` (Architecture Name) | Data |  |
 | `description` (Description) | Small Text |  |
 | `coordination_mode` (Coordination Mode) | Select (specialist_handoff / broad_autonomy) |  |
+| `routine_template` (Routine Template) | Link → `EORL Routine Template` | Blank means Procure-to-Pay, the routine every architecture used before templates existed. |
+| `stage_gated_tools` (Stage-Gated Tools (Matched Tool Ecology)) | Check | Broad autonomy only. At each step the single actor is offered, and authorized for, only the tools of the routine's current stage, the same set the specialist for that stage holds. Removes the tool-breadth difference between the architectures while keeping actor continuity. |
 | `central_coordinator_slot` (Central Coordinator Slot) | Data |  |
 | `actor_slots` (Actor Slots) | Table → `EORL Architecture Actor Slot` |  |
 | `communication_policy` (Communication Policy) | Link → `EORL Communication Policy` | SOTA Milestone 1: the actually-enforced communication graph for agent-chosen messaging (eorl_lab.organization.communication.message_agent). Supersedes communication_edges_json below, which stays inert JSON. |

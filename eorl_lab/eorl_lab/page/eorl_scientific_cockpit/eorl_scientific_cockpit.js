@@ -8,16 +8,18 @@ frappe.pages['eorl-scientific-cockpit'].on_page_load = function (wrapper) {
 	const $body = $(
 		`<div style="padding: 15px;">
 			<p class="text-muted">
-				SOTA Milestone 5 (spec section 38, scoped to its KPI-card core):
-				pick a saved <a href="/app/eorl-analysis-plan">EORL Analysis Plan</a> and
-				two groups of runs, then compare. This always computes AND persists
-				BOTH the parametric and the distribution-free test for whichever
-				pairing mode the plan declares (spec section 44.4: "may recommend,
-				but should never silently select") -- it never picks one for you.
-				The plan's own <code>analysis_unit</code> must be "run"; this blocks
-				outright otherwise (spec section 44.2's independence guardrail --
-				episodes inside one run are not independent replications).
+				Pick a saved <a href="/app/eorl-analysis-plan">EORL Analysis Plan</a> and two groups of
+				runs, then compare. Both the parametric and the distribution-free test are always
+				computed for the plan's pairing mode; the plan names which one is primary. The unit of
+				analysis is the run (the independence guardrail): episodes inside one run are not
+				independent replications. Hedges' g carries a seeded bootstrap interval, the primary
+				p-value is adjusted across the plan's multiple-testing family, and the plan's registered
+				rule turns the result into an interpretation label.
 			</p>
+			<div class="alert alert-info eorl-readonly-note" style="display:none;">
+				Read-only account: results are computed and shown but not saved. Stored results are
+				listed under <a href="/app/eorl-analysis-result">EORL Analysis Result</a>.
+			</div>
 			<div class="row" style="margin-bottom: 10px;">
 				<div class="col-sm-4">
 					<label class="text-muted">Analysis Plan</label>
@@ -50,26 +52,43 @@ frappe.pages['eorl-scientific-cockpit'].on_page_load = function (wrapper) {
 					</div>
 					<div class="col-sm-3">
 						<div class="card" style="padding: 12px;">
-							<div class="text-muted">Standardized Effect (Hedges' g)</div>
+							<div class="text-muted">Hedges' g [95% CI]</div>
 							<div class="eorl-effect" style="font-size: 20px;"></div>
+							<div class="text-muted eorl-effect-ci-method" style="font-size: 11px;"></div>
 						</div>
 					</div>
 					<div class="col-sm-3">
 						<div class="card" style="padding: 12px;">
-							<div class="text-muted">Pairing</div>
-							<div class="eorl-pairing" style="font-size: 20px;"></div>
+							<div class="text-muted">Pairing / scope</div>
+							<div class="eorl-pairing" style="font-size: 16px;"></div>
+							<div class="text-muted eorl-scope" style="font-size: 11px;"></div>
 						</div>
 					</div>
 				</div>
+				<div class="card eorl-interpretation" style="padding: 12px; margin-top: 12px;"></div>
 				<table class="table table-bordered" style="margin-top: 15px; background: var(--card-bg);">
 					<thead>
-						<tr><th>Test</th><th>p-value</th><th>95% CI</th><th>Click-through</th></tr>
+						<tr><th>Test</th><th>Raw p</th><th>Adjusted p</th><th>95% CI (raw difference)</th><th>Click-through</th></tr>
 					</thead>
 					<tbody class="eorl-test-rows"></tbody>
 				</table>
+				<div class="text-muted eorl-run-links" style="font-size: 12px;"></div>
 			</div>
 		</div>`
 	).appendTo(page.body);
+
+	let current = null;
+	const fmtP = (p) => (p === null || p === undefined ? '—' : p < 0.0001 ? Number(p).toExponential(2) : Number(p).toFixed(4));
+	const fmt = (v) => (v === null || v === undefined ? '—' : Number(v).toFixed(3));
+	eorl_lab.export.buttons(page, () => current && {
+		name: `analysis_${current.analysis_plan}`,
+		columns: ['test', 'p_value', 'adjusted_p_value', 'mean_diff', 'ci_95'],
+		rows: current.results,
+		data: current,
+		metadata: { analysis_plan_id: current.analysis_plan, metric: current.metric_name, sequence_scope: current.sequence_scope,
+			run_ids_a: current.run_ids_a, run_ids_b: current.run_ids_b, persisted_results: current.analysis_result_names },
+		specification: { analysis_plan: current.analysis_plan, primary_test: current.primary_test, multiplicity: current.multiplicity },
+	});
 
 	const $planSelect = $body.find('.eorl-plan-select');
 	const $groupA = $body.find('.eorl-group-a-select');
@@ -87,7 +106,7 @@ frappe.pages['eorl-scientific-cockpit'].on_page_load = function (wrapper) {
 
 	frappe.call({
 		method: 'eorl_lab.api.runs.list_runs',
-		args: { limit: 200 },
+		args: { limit: 500 },
 		callback(r) {
 			(r.message || []).forEach((run) => {
 				const label = `${run.name} (${run.status})`;
@@ -113,27 +132,38 @@ frappe.pages['eorl-scientific-cockpit'].on_page_load = function (wrapper) {
 			method: 'eorl_lab.api.analysis.compare_groups',
 			args: { analysis_plan_name: plan, run_ids_group_a: groupA, run_ids_group_b: groupB },
 			callback(r) {
-				const result = r.message;
+				const result = (current = Object.assign(r.message, { run_ids_a: groupA, run_ids_b: groupB }));
 				$summary.show();
+				$body.find('.eorl-readonly-note').toggle(!result.persisted);
 				$body.find('.eorl-n-runs').text(`${result.n_independent_runs_a} vs ${result.n_independent_runs_b} runs`);
 				$body.find('.eorl-n-episodes').text(`${result.n_episodes_a} vs ${result.n_episodes_b} episodes (not the sample size used)`);
-				$body.find('.eorl-means').text(`${result.mean_a.toFixed(3)} / ${result.mean_b.toFixed(3)}`);
-				$body.find('.eorl-effect').text(result.standardized_effect.toFixed(3));
+				$body.find('.eorl-means').text(`${fmt(result.mean_a)} / ${fmt(result.mean_b)}`);
+				const g = result.standardized_effect_ci || {};
+				$body.find('.eorl-effect').text(`${fmt(result.standardized_effect)} [${fmt(g.ci_low)}, ${fmt(g.ci_high)}]`);
+				$body.find('.eorl-effect-ci-method').text(`${g.method || ''}, ${g.n_resamples || ''} resamples, seed ${g.seed || ''}`);
 				$body.find('.eorl-pairing').text(result.paired ? 'Paired (branches)' : 'Independent groups');
+				$body.find('.eorl-scope').text(`metric ${result.metric_name}; primary test ${result.primary_test}`);
+
+				const it = result.interpretation || {};
+				const m = result.multiplicity;
+				$body.find('.eorl-interpretation').html(
+					`<div class="text-muted">Registered interpretation</div>
+					<div style="font-size: 20px;">${frappe.utils.escape_html(it.label || '—')}</div>
+					<div class="text-muted" style="font-size: 11px;">rule cell: ${frappe.utils.escape_html(it.cell || '')}${m ? `; family ${frappe.utils.escape_html(m.family_id)} (${m.method}, ${m.family_size} outcomes)` : '; no multiple-testing family'}</div>`
+				);
 
 				$testRows.empty();
 				result.results.forEach((test, i) => {
-					const ci = test.ci_95 ? `[${test.ci_95[0].toFixed(3)}, ${test.ci_95[1].toFixed(3)}]` : '—';
+					const ci = test.ci_95 && test.ci_95[0] !== null ? `[${fmt(test.ci_95[0])}, ${fmt(test.ci_95[1])}]` : '—';
 					const resultName = result.analysis_result_names[i];
+					const link = resultName ? `<a href="/app/eorl-analysis-result/${resultName}">View full result &amp; provenance</a>` : '<span class="text-muted">not saved</span>';
 					$testRows.append(
-						`<tr>
-							<td>${test.test}</td>
-							<td>${test.p_value === null || test.p_value === undefined ? '—' : test.p_value.toFixed(4)}</td>
-							<td>${ci}</td>
-							<td><a href="/app/eorl-analysis-result/${resultName}">View full result &amp; provenance</a></td>
-						</tr>`
+						`<tr><td>${test.test}${test.test === result.primary_test ? ' <b>(primary)</b>' : ''}</td>
+							<td>${fmtP(test.p_value)}</td><td>${fmtP(test.adjusted_p_value)}</td><td>${ci}</td><td>${link}</td></tr>`
 					);
 				});
+				const links = (ids) => ids.map((x) => `<a href="/app/eorl-run/${x}">${x}</a>`).join(', ');
+				$body.find('.eorl-run-links').html(`Group A: ${links(groupA)}<br>Group B: ${links(groupB)}<br>Plan: <a href="/app/eorl-analysis-plan/${encodeURIComponent(result.analysis_plan)}">${frappe.utils.escape_html(result.analysis_plan)}</a>`);
 			},
 		});
 	});

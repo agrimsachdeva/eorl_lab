@@ -35,11 +35,19 @@ def reproduce_run(run_name: str) -> dict:
 	episode_count = init_payload.get("episode_count") or 1
 	regime_shift_name = init_payload.get("regime_shift")
 
+	# Runs recorded before outcome models were versioned carry no scenario
+	# snapshot; they drew inspection outcomes with the receipt-keyed model.
+	scenario_snapshot = frappe.parse_json(original.scenario_snapshot_json or "{}")
+	outcome_model = scenario_snapshot.get("outcome_model") or "receipt_keyed_v1"
+	actor_engine = original.get("actor_engine")
+
 	reproduction = run_architecture(
 		architecture_name,
 		seed=original.run_seed,
 		episode_count=episode_count,
 		regime_shift=regime_shift_name,
+		actor_engine=actor_engine if actor_engine in ("scripted_deterministic", "bounded_rational") else None,
+		outcome_model=outcome_model,
 	)
 
 	original_hashes = case_hashes_for_run(run_name)

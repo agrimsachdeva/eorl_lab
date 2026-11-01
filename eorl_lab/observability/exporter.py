@@ -79,14 +79,26 @@ def run_initialized_payload(run_name: str) -> dict:
 
 
 def build_run_manifest(run_doc) -> dict:
-	"""Spec section 18's run manifest. Milestone 8 deviation:
-	experiment_id/cell_id are omitted -- EORL Run still has no link to
-	EORL Experiment (a gap documented since Milestone 2 and never
-	closed; Milestone 6's launch_pilot never wrote the association
-	back)."""
+	"""Spec section 18's run manifest. Since the submission-day build it
+	carries the experiment and cell that produced the run, the routine
+	template, the actor engine, the outcome model, the code commit
+	recorded at launch, the failure type and the runtime telemetry."""
 	init_payload = run_initialized_payload(run_doc.name)
 	return {
 		"run_id": run_doc.name,
+		"experiment_id": run_doc.get("experiment"),
+		"cell_id": run_doc.get("cell_id"),
+		"routine_template": run_doc.get("routine_template"),
+		"actor_engine": run_doc.get("actor_engine"),
+		"scenario": frappe.parse_json(run_doc.scenario_snapshot_json) if run_doc.scenario_snapshot_json else None,
+		"code_commit_at_launch": run_doc.get("code_commit"),
+		"failure_type": run_doc.get("failure_type"),
+		"telemetry": {
+			"model_calls": run_doc.get("model_calls"), "input_tokens": run_doc.get("input_tokens"),
+			"output_tokens": run_doc.get("output_tokens"), "total_tokens": run_doc.get("total_tokens"),
+			"retries": run_doc.get("retry_count"), "wallclock_seconds": run_doc.get("wallclock_seconds"),
+			"estimated_cost": run_doc.get("total_cost"),
+		},
 		"seed": run_doc.run_seed,
 		"status": run_doc.status,
 		"started_at": str(run_doc.started_at) if run_doc.started_at else None,
@@ -125,8 +137,11 @@ def build_scenario_stream(run_doc) -> list:
 	elif run_doc.regime_shift_snapshot_json:
 		regime_shift_payload = frappe.parse_json(run_doc.regime_shift_snapshot_json)
 
+	scenario = frappe.parse_json(run_doc.scenario_snapshot_json or "{}")
+	case_fn = frappe.get_attr(scenario["scenario_generator"]) if scenario.get("scenario_generator") else generate_case
+	outcome_model = scenario.get("outcome_model") or "receipt_keyed_v1"
 	return [
-		generate_case(seed=run_doc.run_seed, episode=n, regime_shift=regime_shift_payload)
+		case_fn(seed=run_doc.run_seed, episode=n, regime_shift=regime_shift_payload, outcome_model=outcome_model)
 		for n in range(1, episode_count + 1)
 	]
 

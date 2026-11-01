@@ -3,7 +3,7 @@
 | Field | Type | Description |
 |---|---|---|
 | `profile_name` (Profile Name) | Data |  |
-| `provider` (Provider) | Select (openai_compatible / anthropic / deterministic) |  |
+| `provider` (Provider) | Select (openai_compatible / anthropic / deterministic / bounded_rational) |  |
 | `enabled` (Enabled) | Check |  |
 | `base_url` (Base URL) | Data |  |
 | `api_key_reference` (API Key Reference) | Data | Key/reference only; resolve the actual secret from site config or environment. |

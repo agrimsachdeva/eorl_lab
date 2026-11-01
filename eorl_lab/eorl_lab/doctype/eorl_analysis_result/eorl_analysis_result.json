@@ -18,6 +18,10 @@
   "n_episodes_a",
   "n_episodes_b",
   "paired",
+  "sequence_scope",
+  "family_id",
+  "adjustment_method",
+  "is_primary_test",
   "metric_definition_version",
   "code_commit",
   "stats_package_version",
@@ -26,44 +30,240 @@
   "mean_b",
   "raw_effect",
   "standardized_effect",
+  "effect_size_ci_low",
+  "effect_size_ci_high",
+  "effect_size_ci_method",
   "ci_95_lower",
   "ci_95_upper",
   "p_value",
   "adjusted_p_value",
+  "undefined_fields",
+  "interpretation_label",
   "section_detail",
   "diagnostics_json"
  ],
  "fields": [
-  {"fieldname": "analysis_plan", "fieldtype": "Link", "label": "Analysis Plan", "options": "EORL Analysis Plan", "reqd": 1, "in_list_view": 1, "search_index": 1},
-  {"fieldname": "experiment", "fieldtype": "Link", "label": "Experiment", "options": "EORL Experiment", "in_list_view": 1},
-  {"fieldname": "test_family", "fieldtype": "Data", "label": "Test Family", "in_list_view": 1, "description": "Which test actually produced THIS result row (e.g. 'welch_t', 'permutation', 'paired_t', 'paired_permutation') -- compare_groups always computes more than one test family per call and writes one EORL Analysis Result per family, so nothing is silently chosen for the researcher (V2 section 44.4)."},
-  {"fieldname": "section_provenance", "fieldtype": "Section Break", "label": "Provenance", "description": "V2 section 52: 'A user should be able to click any reported result and see exactly which runs generated it.'"},
-  {"fieldname": "run_ids_group_a", "fieldtype": "Small Text", "label": "Run IDs (Group A)", "description": "Comma-separated EORL Run names."},
-  {"fieldname": "run_ids_group_b", "fieldtype": "Small Text", "label": "Run IDs (Group B)"},
-  {"fieldname": "n_independent_runs_a", "fieldtype": "Int", "label": "N Independent Runs (A)"},
-  {"fieldname": "n_independent_runs_b", "fieldtype": "Int", "label": "N Independent Runs (B)"},
-  {"fieldname": "n_episodes_a", "fieldtype": "Int", "label": "N Episodes (A)", "description": "Shown alongside N Independent Runs so the two are never confused (V2 section 44.2) -- never the sample size the test itself used."},
-  {"fieldname": "n_episodes_b", "fieldtype": "Int", "label": "N Episodes (B)"},
-  {"fieldname": "paired", "fieldtype": "Check", "label": "Paired Comparison", "description": "True if this result came from a paired/matched test (counterfactual branch pairs, V2 section 44.3), false for an ordinary independent-groups test."},
-  {"fieldname": "metric_definition_version", "fieldtype": "Data", "label": "Metric Definition Version", "description": "The EORL Metric.metric_version actually used for every run's outcome value."},
-  {"fieldname": "code_commit", "fieldtype": "Data", "label": "Code Commit"},
-  {"fieldname": "stats_package_version", "fieldtype": "Data", "label": "Statistics Package Version", "description": "e.g. 'scipy 1.15.3' -- which library and version actually computed this result."},
-  {"fieldname": "section_result", "fieldtype": "Section Break", "label": "Result"},
-  {"fieldname": "mean_a", "fieldtype": "Float", "label": "Mean (A)"},
-  {"fieldname": "mean_b", "fieldtype": "Float", "label": "Mean (B)"},
-  {"fieldname": "raw_effect", "fieldtype": "Float", "label": "Raw Effect (Mean Difference)", "in_list_view": 1},
-  {"fieldname": "standardized_effect", "fieldtype": "Float", "label": "Standardized Effect (Hedges' g)"},
-  {"fieldname": "ci_95_lower", "fieldtype": "Float", "label": "95% CI Lower"},
-  {"fieldname": "ci_95_upper", "fieldtype": "Float", "label": "95% CI Upper"},
-  {"fieldname": "p_value", "fieldtype": "Float", "label": "p-value", "in_list_view": 1},
-  {"fieldname": "adjusted_p_value", "fieldtype": "Float", "label": "Adjusted p-value", "description": "Reserved (V2 section 46, multiple-testing correction) -- left blank; not implemented yet."},
-  {"fieldname": "section_detail", "fieldtype": "Section Break", "label": "Full Detail", "collapsible": 1},
-  {"fieldname": "diagnostics_json", "fieldtype": "Code", "label": "Diagnostics (JSON)", "options": "JSON", "description": "The complete raw dict returned by eorl_lab.analysis.stats (t-statistic/df for t-tests, n_iterations for permutation tests, etc.) -- the fields above are the commonly-reported subset, this is the full record."}
+  {
+   "fieldname": "analysis_plan",
+   "fieldtype": "Link",
+   "label": "Analysis Plan",
+   "options": "EORL Analysis Plan",
+   "reqd": 1,
+   "in_list_view": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "experiment",
+   "fieldtype": "Link",
+   "label": "Experiment",
+   "options": "EORL Experiment",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "test_family",
+   "fieldtype": "Data",
+   "label": "Test Family",
+   "in_list_view": 1,
+   "description": "Which test actually produced THIS result row (e.g. 'welch_t', 'permutation', 'paired_t', 'paired_permutation') -- compare_groups always computes more than one test family per call and writes one EORL Analysis Result per family, so nothing is silently chosen for the researcher (V2 section 44.4)."
+  },
+  {
+   "fieldname": "section_provenance",
+   "fieldtype": "Section Break",
+   "label": "Provenance",
+   "description": "V2 section 52: 'A user should be able to click any reported result and see exactly which runs generated it.'"
+  },
+  {
+   "fieldname": "run_ids_group_a",
+   "fieldtype": "Small Text",
+   "label": "Run IDs (Group A)",
+   "description": "Comma-separated EORL Run names."
+  },
+  {
+   "fieldname": "run_ids_group_b",
+   "fieldtype": "Small Text",
+   "label": "Run IDs (Group B)"
+  },
+  {
+   "fieldname": "n_independent_runs_a",
+   "fieldtype": "Int",
+   "label": "N Independent Runs (A)"
+  },
+  {
+   "fieldname": "n_independent_runs_b",
+   "fieldtype": "Int",
+   "label": "N Independent Runs (B)"
+  },
+  {
+   "fieldname": "n_episodes_a",
+   "fieldtype": "Int",
+   "label": "N Episodes (A)",
+   "description": "Shown alongside N Independent Runs so the two are never confused (V2 section 44.2) -- never the sample size the test itself used."
+  },
+  {
+   "fieldname": "n_episodes_b",
+   "fieldtype": "Int",
+   "label": "N Episodes (B)"
+  },
+  {
+   "fieldname": "paired",
+   "fieldtype": "Check",
+   "label": "Paired Comparison",
+   "description": "True if this result came from a paired/matched test (counterfactual branch pairs, V2 section 44.3), false for an ordinary independent-groups test."
+  },
+  {
+   "fieldname": "sequence_scope",
+   "fieldtype": "Data",
+   "label": "Sequence Scope"
+  },
+  {
+   "fieldname": "family_id",
+   "fieldtype": "Data",
+   "label": "Multiple-Testing Family"
+  },
+  {
+   "fieldname": "adjustment_method",
+   "fieldtype": "Data",
+   "label": "Adjustment Method"
+  },
+  {
+   "fieldname": "is_primary_test",
+   "fieldtype": "Check",
+   "label": "Primary Test",
+   "description": "The test the plan's model_family names. Multiplicity adjustment applies to primary tests only."
+  },
+  {
+   "fieldname": "metric_definition_version",
+   "fieldtype": "Data",
+   "label": "Metric Definition Version",
+   "description": "The EORL Metric.metric_version actually used for every run's outcome value."
+  },
+  {
+   "fieldname": "code_commit",
+   "fieldtype": "Data",
+   "label": "Code Commit"
+  },
+  {
+   "fieldname": "stats_package_version",
+   "fieldtype": "Data",
+   "label": "Statistics Package Version",
+   "description": "e.g. 'scipy 1.15.3' -- which library and version actually computed this result."
+  },
+  {
+   "fieldname": "section_result",
+   "fieldtype": "Section Break",
+   "label": "Result"
+  },
+  {
+   "fieldname": "mean_a",
+   "fieldtype": "Float",
+   "label": "Mean (A)"
+  },
+  {
+   "fieldname": "mean_b",
+   "fieldtype": "Float",
+   "label": "Mean (B)"
+  },
+  {
+   "fieldname": "raw_effect",
+   "fieldtype": "Float",
+   "label": "Raw Effect (Mean Difference)",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "standardized_effect",
+   "fieldtype": "Float",
+   "label": "Standardized Effect (Hedges' g)"
+  },
+  {
+   "fieldname": "effect_size_ci_low",
+   "fieldtype": "Float",
+   "label": "Hedges' g 95% CI Low",
+   "precision": "6"
+  },
+  {
+   "fieldname": "effect_size_ci_high",
+   "fieldtype": "Float",
+   "label": "Hedges' g 95% CI High",
+   "precision": "6"
+  },
+  {
+   "fieldname": "effect_size_ci_method",
+   "fieldtype": "Data",
+   "label": "Effect-Size CI Method"
+  },
+  {
+   "fieldname": "ci_95_lower",
+   "fieldtype": "Float",
+   "label": "95% CI Lower"
+  },
+  {
+   "fieldname": "ci_95_upper",
+   "fieldtype": "Float",
+   "label": "95% CI Upper"
+  },
+  {
+   "fieldname": "p_value",
+   "fieldtype": "Float",
+   "label": "Raw p-value",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "adjusted_p_value",
+   "fieldtype": "Float",
+   "label": "Adjusted p-value",
+   "description": "Reserved (V2 section 46, multiple-testing correction) -- left blank; not implemented yet."
+  },
+  {
+   "fieldname": "undefined_fields",
+   "fieldtype": "Small Text",
+   "label": "Undefined Fields",
+   "description": "Numeric fields whose true value is undefined (for example a p-value from a zero-variance comparison). Frappe stores them as 0; diagnostics_json holds null."
+  },
+  {
+   "fieldname": "interpretation_label",
+   "fieldtype": "Data",
+   "label": "Registered Interpretation",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "section_detail",
+   "fieldtype": "Section Break",
+   "label": "Full Detail",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "diagnostics_json",
+   "fieldtype": "Code",
+   "label": "Diagnostics (JSON)",
+   "options": "JSON",
+   "description": "The complete raw dict returned by eorl_lab.analysis.stats (t-statistic/df for t-tests, n_iterations for permutation tests, etc.) -- the fields above are the commonly-reported subset, this is the full record."
+  }
  ],
  "permissions": [
-  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
-  {"role": "EORL Administrator", "read": 1, "write": 1, "create": 1, "delete": 1},
-  {"role": "EORL Researcher", "read": 1, "write": 1, "create": 1, "delete": 0},
-  {"role": "EORL Viewer", "read": 1}
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "EORL Administrator",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "EORL Researcher",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 0
+  },
+  {
+   "role": "EORL Viewer",
+   "read": 1
+  }
  ]
 }

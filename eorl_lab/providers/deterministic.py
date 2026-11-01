@@ -27,7 +27,9 @@ def _choose_supplier(case, scratch, memory):
 	for record in memory:  # already ranked most-relevant first by the memory store
 		action = record.get("action") or ""
 		if record.get("success") and action.startswith("ordered_from:"):
-			candidate = action.split("ordered_from:", 1)[1]
+			# Since the submission-day build an actor that saw the
+			# inspection appends ";quality:passed|failed" to its action.
+			candidate = action.split("ordered_from:", 1)[1].split(";", 1)[0]
 			if candidate in candidates:
 				remembered_supplier = candidate
 				break
@@ -134,6 +136,15 @@ class DeterministicProvider(ModelProvider):
 	def _slug(role):
 		return (role or "").strip().lower().replace(" ", "_")
 
+	# Two hooks the bounded-rational engine overrides. The scripted
+	# baseline always performs every optional check and always applies the
+	# shared supplier rule.
+	def _choose_supplier(self, case, scratch, memory):
+		return _choose_supplier(case, scratch, memory)
+
+	def _wants_check(self, context, check_name: str) -> bool:
+		return True
+
 	def _decide_purchasing_agent(self, context):
 		case = context["case"]
 		scratch = context["scratch"]
@@ -148,7 +159,7 @@ class DeterministicProvider(ModelProvider):
 				assessment="No supplier options observed yet for this case.",
 			)
 
-		supplier, basis, assessment = _choose_supplier(case, scratch, memory)
+		supplier, basis, assessment = self._choose_supplier(case, scratch, memory)
 		return _decision(
 			"create_purchase_order",
 			{
@@ -168,7 +179,7 @@ class DeterministicProvider(ModelProvider):
 		handoff = context["handoff"]
 		scratch = context["scratch"]
 
-		if "purchase_order_status" not in scratch:
+		if "purchase_order_status" not in scratch and self._wants_check(context, "review_purchase_order"):
 			return _decision(
 				"get_purchase_order",
 				{"name": handoff["purchase_order"]},
@@ -189,7 +200,7 @@ class DeterministicProvider(ModelProvider):
 		handoff = context["handoff"]
 		scratch = context["scratch"]
 
-		if "purchase_order_status" not in scratch:
+		if "purchase_order_status" not in scratch and self._wants_check(context, "confirm_purchase_order"):
 			return _decision(
 				"get_purchase_order",
 				{"name": handoff["purchase_order"]},
@@ -223,7 +234,7 @@ class DeterministicProvider(ModelProvider):
 		handoff = context["handoff"]
 		scratch = context["scratch"]
 
-		if "purchase_receipt_status" not in scratch:
+		if "purchase_receipt_status" not in scratch and self._wants_check(context, "confirm_receipt"):
 			return _decision(
 				"get_receipt_status",
 				{"name": handoff["purchase_receipt"]},
@@ -287,7 +298,7 @@ class DeterministicProvider(ModelProvider):
 			)
 
 		if "purchase_order" not in scratch:
-			supplier, basis, assessment = _choose_supplier(case, scratch, memory)
+			supplier, basis, assessment = self._choose_supplier(case, scratch, memory)
 			return _decision(
 				"create_purchase_order",
 				{
@@ -303,7 +314,7 @@ class DeterministicProvider(ModelProvider):
 				assessment=assessment,
 			)
 
-		if "purchase_order_status" not in scratch:
+		if "purchase_order_status" not in scratch and self._wants_check(context, "review_purchase_order"):
 			return _decision(
 				"get_purchase_order",
 				{"name": scratch["purchase_order"]},
@@ -343,7 +354,7 @@ class DeterministicProvider(ModelProvider):
 				assessment="Submitting own receipt" + ("" if scratch.get("quality_passed") else " with exception handled") + ".",
 			)
 
-		if "purchase_receipt_status" not in scratch:
+		if "purchase_receipt_status" not in scratch and self._wants_check(context, "confirm_receipt"):
 			return _decision(
 				"get_receipt_status",
 				{"name": scratch["purchase_receipt"]},
@@ -386,3 +397,64 @@ class DeterministicProvider(ModelProvider):
 			basis="Deterministic policy: finalize payment.",
 			assessment="Payment entry created; submitting to close the routine end to end.",
 		)
+
+	# ------------------------------------------------------------------
+	# Order-to-cash (submission-day plan section 2.1): three specialist
+	# roles and one broad role, same conventions as procure-to-pay.
+	# ------------------------------------------------------------------
+
+	def _o2c_next(self, context, steps):
+		"""Returns the decision for the first step in `steps` whose result
+		key is not yet in scratch. Each step is (result_key, tool, args_fn,
+		optional_check_name or None)."""
+		scratch = context["scratch"]
+		pending = [st for st in steps if st[0] not in scratch and (st[3] is None or self._wants_check(context, st[3]))]
+		for i, (key, tool, args_fn, _check) in enumerate(pending):
+			return _decision(
+				tool, args_fn(context), stop=(i == len(pending) - 1),
+				basis=f"Deterministic policy: {tool.replace('_', ' ')}.",
+				assessment=f"Next step: {tool}.",
+			)
+		return _decision("finish_turn", {}, stop=True, basis="Nothing left for this role.", assessment="Done.")
+
+	@staticmethod
+	def _o2c_order_args(ctx):
+		case, scratch = ctx["case"], ctx["scratch"]
+		return {"customer": scratch.get("customer") or case["customer"], "item_code": case["item_code"], "qty": case["qty"],
+			"company": case["company"], "warehouse": case["warehouse"], "rate": case.get("selling_rate")}
+
+	def _sales_steps(self):
+		return [
+			("customer", "get_customer_order", lambda c: {}, None),
+			("sales_order", "create_sales_order", self._o2c_order_args, None),
+			("sales_order_submitted", "submit_sales_order", lambda c: {"name": c["scratch"]["sales_order"]}, None),
+		]
+
+	def _fulfillment_steps(self, source):
+		return [
+			("sales_order_status", "get_sales_order", lambda c: {"name": source(c)["sales_order"]}, "confirm_sales_order"),
+			("delivery_note", "create_delivery_note", lambda c: {"sales_order": source(c)["sales_order"]}, None),
+			("delivery_note_submitted", "submit_delivery_note", lambda c: {"name": c["scratch"]["delivery_note"]}, None),
+		]
+
+	def _billing_steps(self, source):
+		return [
+			("delivery_note_status", "get_delivery_status", lambda c: {"name": source(c)["delivery_note"]}, "confirm_delivery"),
+			("sales_invoice", "create_sales_invoice", lambda c: {"delivery_note": source(c)["delivery_note"]}, None),
+			("sales_invoice_submitted", "submit_sales_invoice", lambda c: {"name": c["scratch"]["sales_invoice"]}, None),
+			("customer_payment", "create_customer_payment", lambda c: {"sales_invoice": c["scratch"]["sales_invoice"]}, None),
+			("customer_payment_submitted", "submit_customer_payment", lambda c: {"name": c["scratch"]["customer_payment"]}, None),
+		]
+
+	def _decide_sales_agent(self, context):
+		return self._o2c_next(context, self._sales_steps())
+
+	def _decide_fulfillment_agent(self, context):
+		return self._o2c_next(context, self._fulfillment_steps(lambda c: c["handoff"]))
+
+	def _decide_billing_agent(self, context):
+		return self._o2c_next(context, self._billing_steps(lambda c: c["handoff"]))
+
+	def _decide_general_order_agent(self, context):
+		own = lambda c: c["scratch"]  # noqa: E731 -- one actor reads its own results instead of a handoff
+		return self._o2c_next(context, self._sales_steps() + self._fulfillment_steps(own) + self._billing_steps(own))

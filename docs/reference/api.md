@@ -21,3 +21,7 @@ rather than reaching into `eorl_lab.runtime` directly.
 ::: eorl_lab.api.process
 
 ::: eorl_lab.api.exports
+
+::: eorl_lab.api.queue
+
+::: eorl_lab.api.reviewer

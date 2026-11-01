@@ -2,3 +2,6 @@
 
 [post_model_sync]
 eorl_lab.patches.v1_seed_initial_constructs
+eorl_lab.patches.v2_construct_registry_measures
+eorl_lab.patches.v2_seed_routine_templates
+eorl_lab.patches.v2_backfill_run_provenance

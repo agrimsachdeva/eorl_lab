@@ -359,9 +359,12 @@ class TestGroundTruthAndAuthority(FrappeTestCase):
 		from eorl_lab.analysis.paths import PROCESS_STAGE_BY_TOOL
 
 		resolved = grammar.to_stage_map()
+		fixture_stages = {row.stage_id for row in grammar.stages}
 		for tool_name, expected_stage in PROCESS_STAGE_BY_TOOL.items():
 			if tool_name == "message_agent":
 				continue  # deliberately not modeled in this grammar fixture
+			if expected_stage not in fixture_stages:
+				continue  # finish_turn (CONTROL) and the order-to-cash tools belong to other grammars
 			self.assertEqual(resolved.get(tool_name), expected_stage, tool_name)
 
 	def test_process_path_extraction_accepts_a_custom_stage_map(self):

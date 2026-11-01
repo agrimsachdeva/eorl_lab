@@ -19,3 +19,4 @@
 | `allow_proprietary_models` (Allow Proprietary Models) | Check |  |
 | `canonical_seed` (Canonical Seed) | Int |  |
 | `external_worker_callback_secret_reference` (External Worker Callback Secret Reference) | Data | Key/reference only. Do not store the secret value itself here; resolve from site config or environment. |
+| `reviewer_walkthrough_json` (Reviewer Walkthrough Records) | Code | Names of the records the Reviewer Start Here page opens (architecture, llm_run, episode, process_run, branch_parent, branch_children, analysis_plan, analysis_result, export_run). Missing keys are filled with the most recent matching record. |

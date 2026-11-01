@@ -41,6 +41,8 @@ frappe.pages['eorl-experiment-studio'].on_page_load = function (wrapper) {
 				</table>
 				<button class="btn btn-default eorl-validate-btn">Validate Only</button>
 				<button class="btn btn-primary eorl-launch-btn">Launch Pilot</button>
+				<button class="btn btn-default eorl-queue-btn">Queue All Runs (background)</button>
+				<div class="eorl-estimate text-muted" style="margin-top: 10px; font-size: 12px;"></div>
 				<div class="eorl-launch-status" style="margin-top: 10px;"></div>
 			</div>
 		</div>`
@@ -82,6 +84,19 @@ frappe.pages['eorl-experiment-studio'].on_page_load = function (wrapper) {
 				$summary.find('.eorl-total-runs').html(`<strong>${s.total_run_count}</strong>`);
 				$status.text('');
 				$summary.show();
+				frappe.call({
+					method: 'eorl_lab.api.experiments.estimate_experiment_cost',
+					args: { experiment_name },
+					callback(e) {
+						const d = e.message;
+						const basis = d.by_architecture.map((a) => `${a.architecture}: ${a.basis_runs ? `${a.basis_runs} completed run(s)` : 'no completed runs yet'}`).join('; ');
+						$body.find('.eorl-estimate').html(
+							`Estimate from completed runs of the same architectures: about <b>${Math.round(d.projected_total.model_calls)}</b> model calls, ` +
+							`<b>${Math.round(d.projected_total.total_tokens)}</b> tokens and <b>${d.projected_hours.toFixed(2)} h</b> wallclock for ${d.runs_planned} runs. ` +
+							`<br>Basis: ${frappe.utils.escape_html(basis)}.`
+						);
+					},
+				});
 			},
 		});
 	}
@@ -101,6 +116,19 @@ frappe.pages['eorl-experiment-studio'].on_page_load = function (wrapper) {
 						? `<span class="indicator-pill green">Valid</span> ${v.cell_count} cell(s), ${v.total_run_count} run(s).`
 						: `<span class="indicator-pill red">Invalid</span> ${v.errors.join('; ')}`
 				);
+			},
+		});
+	});
+
+	$body.find('.eorl-queue-btn').on('click', () => {
+		const experiment_name = $select.val();
+		if (!experiment_name) return;
+		frappe.call({
+			method: 'eorl_lab.api.queue.enqueue_experiment',
+			args: { experiment_name },
+			callback(r) {
+				const q = r.message.queued_runs;
+				$status.html(`<div>Queued ${q.length} run(s). You can leave this page; follow them in the <a href="/app/eorl-run-monitor">Run Monitor</a>.</div><pre>${q.join('\n')}</pre>`);
 			},
 		});
 	});

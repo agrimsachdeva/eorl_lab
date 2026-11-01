@@ -43,6 +43,7 @@ nav:
       - Using the Front End: guide/front-end.md
       - Statistical Analysis: guide/statistical-analysis.md
       - Reproducibility & Export: guide/reproducibility.md
+      - Stage 1 Additions: guide/stage1-additions.md
   - DocType Reference: doctypes/index.md
   - API Reference:
       - Overview: reference/index.md

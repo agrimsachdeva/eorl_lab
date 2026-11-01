@@ -10,6 +10,7 @@
   "construct_name",
   "version",
   "level_of_analysis",
+  "status",
   "section_theory",
   "theoretical_definition",
   "source_citations",
@@ -22,24 +23,117 @@
   "validity_notes"
  ],
  "fields": [
-  {"fieldname": "construct_name", "fieldtype": "Data", "label": "Construct Name", "reqd": 1, "unique": 1, "in_list_view": 1},
-  {"fieldname": "version", "fieldtype": "Data", "label": "Version", "default": "1.0", "in_list_view": 1},
-  {"fieldname": "level_of_analysis", "fieldtype": "Select", "label": "Level of Analysis", "options": "actor\ndyad\ngroup\norganization\nprocess", "in_list_view": 1},
-  {"fieldname": "section_theory", "fieldtype": "Section Break", "label": "Theory"},
-  {"fieldname": "theoretical_definition", "fieldtype": "Text", "label": "Theoretical Definition"},
-  {"fieldname": "source_citations", "fieldtype": "Small Text", "label": "Source Citations"},
-  {"fieldname": "section_implementation", "fieldtype": "Section Break", "label": "Implementation", "description": "V2 section 20: a construct registry connects theory to implementation -- these fields should point at REAL code, or be left blank and explained in Validity Notes, never filled with aspirational text."},
-  {"fieldname": "computational_definition", "fieldtype": "Text", "label": "Computational Definition"},
-  {"fieldname": "manipulation_strategy", "fieldtype": "Text", "label": "Manipulation Strategy"},
-  {"fieldname": "measurement_function", "fieldtype": "Data", "label": "Measurement Function", "description": "Dotted Python path to the real function that computes this construct (e.g. 'eorl_lab.analysis.coherence.actor_continuity'), resolved by EORLConstruct.resolve_measurement_function(). Leave blank if not implemented yet -- say so in Validity Notes instead of guessing."},
-  {"fieldname": "required_events", "fieldtype": "Small Text", "label": "Required Event Types", "description": "Comma-separated EORL Event.event_type values the measurement function needs present in a run's trace to compute this construct."},
-  {"fieldname": "section_validity", "fieldtype": "Section Break", "label": "Validity"},
-  {"fieldname": "validity_notes", "fieldtype": "Text", "label": "Validity Notes"}
+  {
+   "fieldname": "construct_name",
+   "fieldtype": "Data",
+   "label": "Construct Name",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "version",
+   "fieldtype": "Data",
+   "label": "Version",
+   "default": "1.0",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "level_of_analysis",
+   "fieldtype": "Select",
+   "label": "Level of Analysis",
+   "options": "actor\ndyad\ngroup\norganization\nprocess",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "executable\npartial\nconceptual",
+   "default": "conceptual",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "executable: measurement_function resolves and runs on recorded runs. partial: measured only in part. conceptual: defined, not yet measured."
+  },
+  {
+   "fieldname": "section_theory",
+   "fieldtype": "Section Break",
+   "label": "Theory"
+  },
+  {
+   "fieldname": "theoretical_definition",
+   "fieldtype": "Text",
+   "label": "Theoretical Definition"
+  },
+  {
+   "fieldname": "source_citations",
+   "fieldtype": "Small Text",
+   "label": "Source Citations"
+  },
+  {
+   "fieldname": "section_implementation",
+   "fieldtype": "Section Break",
+   "label": "Implementation",
+   "description": "V2 section 20: a construct registry connects theory to implementation -- these fields should point at REAL code, or be left blank and explained in Validity Notes, never filled with aspirational text."
+  },
+  {
+   "fieldname": "computational_definition",
+   "fieldtype": "Text",
+   "label": "Measurement Definition"
+  },
+  {
+   "fieldname": "manipulation_strategy",
+   "fieldtype": "Text",
+   "label": "Manipulation Definition"
+  },
+  {
+   "fieldname": "measurement_function",
+   "fieldtype": "Data",
+   "label": "Measurement Function",
+   "description": "Dotted Python path to the real function that computes this construct (e.g. 'eorl_lab.analysis.coherence.actor_continuity'), resolved by EORLConstruct.resolve_measurement_function(). Leave blank if not implemented yet -- say so in Validity Notes instead of guessing."
+  },
+  {
+   "fieldname": "required_events",
+   "fieldtype": "Small Text",
+   "label": "Required Event Types",
+   "description": "Comma-separated EORL Event.event_type values the measurement function needs present in a run's trace to compute this construct."
+  },
+  {
+   "fieldname": "section_validity",
+   "fieldtype": "Section Break",
+   "label": "Validity"
+  },
+  {
+   "fieldname": "validity_notes",
+   "fieldtype": "Text",
+   "label": "Known Validity Limits"
+  }
  ],
  "permissions": [
-  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
-  {"role": "EORL Administrator", "read": 1, "write": 1, "create": 1, "delete": 1},
-  {"role": "EORL Researcher", "read": 1, "write": 1, "create": 1, "delete": 0},
-  {"role": "EORL Viewer", "read": 1}
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "EORL Administrator",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "EORL Researcher",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 0
+  },
+  {
+   "role": "EORL Viewer",
+   "read": 1
+  }
  ]
 }

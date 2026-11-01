@@ -26,7 +26,9 @@ class TestEORLConstructRegistry(FrappeTestCase):
 			self.assertTrue(callable(fn), f"{name}'s measurement_function must resolve to a callable")
 
 	def test_unimplemented_construct_raises_not_implemented_rather_than_guessing(self):
-		construct = frappe.get_doc("EORL Construct", "Centralization")
+		# Centralization gained a measurement function on submission day;
+		# Formalization is still defined but not measured.
+		construct = frappe.get_doc("EORL Construct", "Formalization")
 		self.assertFalse(construct.measurement_function)
 		with self.assertRaises(NotImplementedError):
 			construct.resolve_measurement_function()

@@ -2,13 +2,19 @@
 
 **Executable Organizational Routine Laboratory.**
 
-EORL Lab is a Frappe/ERPNext app for running controlled experiments on
-organizational structure itself, against a persistent ERPNext company
-rather than a toy simulation. Teams of agents (scripted or LLM-backed)
+EORL Lab is research infrastructure for executable organizational
+theory: a Frappe/ERPNext app for running controlled experiments on
+organizational structure itself, against a persistent ERPNext company.
+Computational actors (scripted, bounded-rational or language-model)
 act under real authority constraints, tool access, memory, and
 communication policies. Their actions — purchase orders, receipts,
-invoices, payments — are consequential, and they leave a queryable,
-event-sourced trace behind.
+invoices, payments, sales orders, deliveries — are consequential, and
+they leave a queryable, event-sourced trace behind.
+
+*Demonstration 1: Agentic Routinization and Adaptive Repertoire* is the
+first use of the instrument, not its definition. See
+[Stage 1 additions](guide/stage1-additions.md) for what was added for the
+Organization Science Stage 1 submission.
 
 > EORL is a laboratory for executable organizing: persistent enterprise
 > state, consequential action, explicit organizational structure,

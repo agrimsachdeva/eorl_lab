@@ -1,0 +1,46 @@
+{
+ "doctype": "DocType",
+ "name": "EORL Routine Template",
+ "module": "EORL Lab",
+ "custom": 0,
+ "istable": 0,
+ "autoname": "field:routine_name",
+ "track_changes": 1,
+ "description": "A reusable organizational routine: roles, stage order, handoffs, per-stage tools, scenario generator and terminal conditions. The orchestrator reads these and names no routine itself.",
+ "field_order": [
+  "routine_name", "version", "domain", "description",
+  "section_process", "process_grammar", "required_tools", "default_roles", "stage_sequence_json",
+  "section_scenario", "scenario_generator", "exogenous_state_function", "terminal_conditions", "outcome_keys",
+  "section_runtime", "broad_slot", "broad_role", "memory_domain", "default_metrics"
+ ],
+ "fields": [
+  {"fieldname": "routine_name", "fieldtype": "Data", "label": "Routine Name", "reqd": 1, "unique": 1, "in_list_view": 1},
+  {"fieldname": "version", "fieldtype": "Data", "label": "Version", "default": "1", "in_list_view": 1},
+  {"fieldname": "domain", "fieldtype": "Data", "label": "Domain", "in_list_view": 1},
+  {"fieldname": "description", "fieldtype": "Small Text", "label": "Description"},
+  {"fieldname": "section_process", "fieldtype": "Section Break", "label": "Process"},
+  {"fieldname": "process_grammar", "fieldtype": "Link", "label": "Process Grammar", "options": "EORL Process Grammar"},
+  {"fieldname": "required_tools", "fieldtype": "Small Text", "label": "Required Tools", "description": "Comma-separated semantic tool names the routine uses."},
+  {"fieldname": "default_roles", "fieldtype": "Small Text", "label": "Default Roles"},
+  {"fieldname": "stage_sequence_json", "fieldtype": "Code", "options": "JSON", "label": "Stage Sequence", "reqd": 1,
+   "description": "Ordered list of {role, slot, handoff_keys, tools, completes_on}. Specialist handoff runs one actor per entry in this order; broad autonomy runs one actor through all of them."},
+  {"fieldname": "section_scenario", "fieldtype": "Section Break", "label": "Scenario and Termination"},
+  {"fieldname": "scenario_generator", "fieldtype": "Data", "label": "Scenario Generator", "reqd": 1, "description": "Dotted path to generate_case(seed, episode, regime_shift, outcome_model)."},
+  {"fieldname": "exogenous_state_function", "fieldtype": "Data", "label": "Exogenous State Function", "description": "Dotted path to exogenous_state(case, regime_shift)."},
+  {"fieldname": "terminal_conditions", "fieldtype": "Small Text", "label": "Terminal Conditions", "description": "Comma-separated keys that must be present and truthy in the final routine state for an episode to count as complete."},
+  {"fieldname": "outcome_keys", "fieldtype": "Small Text", "label": "Outcome Keys", "description": "Comma-separated routine-state keys copied into each episode outcome."},
+  {"fieldname": "section_runtime", "fieldtype": "Section Break", "label": "Runtime"},
+  {"fieldname": "broad_slot", "fieldtype": "Data", "label": "Broad-Autonomy Slot"},
+  {"fieldname": "broad_role", "fieldtype": "Data", "label": "Broad-Autonomy Role"},
+  {"fieldname": "memory_domain", "fieldtype": "Data", "label": "Memory Domain"},
+  {"fieldname": "default_metrics", "fieldtype": "Small Text", "label": "Default Metrics"}
+ ],
+ "permissions": [
+  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
+  {"role": "EORL Administrator", "read": 1, "write": 1, "create": 1, "delete": 1},
+  {"role": "EORL Researcher", "read": 1, "write": 1, "create": 1, "delete": 0},
+  {"role": "EORL Viewer", "read": 1}
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

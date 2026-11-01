@@ -26,32 +26,155 @@
   "section_security",
   "allow_proprietary_models",
   "canonical_seed",
-  "external_worker_callback_secret_reference"
+  "external_worker_callback_secret_reference",
+  "section_reviewer",
+  "reviewer_walkthrough_json"
  ],
  "fields": [
-  {"fieldname": "enabled", "fieldtype": "Check", "label": "Enabled", "default": "1"},
-  {"fieldname": "default_lab_company", "fieldtype": "Link", "label": "Default Lab Company", "options": "Company"},
-  {"fieldname": "default_timezone", "fieldtype": "Data", "label": "Default Timezone", "default": "UTC"},
-  {"fieldname": "default_provider_profile", "fieldtype": "Link", "label": "Default Provider Profile", "options": "EORL Model Profile"},
-  {"fieldname": "section_execution", "fieldtype": "Section Break", "label": "Execution Defaults"},
-  {"fieldname": "default_max_episode_steps", "fieldtype": "Int", "label": "Default Max Episode Steps", "default": "50"},
-  {"fieldname": "default_wallclock_timeout_seconds", "fieldtype": "Int", "label": "Default Wallclock Timeout (s)", "default": "300"},
-  {"fieldname": "local_run_worker_queue", "fieldtype": "Data", "label": "Local Run Worker Queue", "default": "eorl"},
-  {"fieldname": "max_parallel_local_runs", "fieldtype": "Int", "label": "Max Parallel Local Runs", "default": "1"},
-  {"fieldname": "section_observability", "fieldtype": "Section Break", "label": "Observability"},
-  {"fieldname": "default_event_storage_mode", "fieldtype": "Select", "label": "Default Event Storage Mode", "options": "Frappe DB\nJSONL\nBoth", "default": "Frappe DB"},
-  {"fieldname": "artifact_export_root", "fieldtype": "Data", "label": "Artifact Export Root"},
-  {"fieldname": "enable_cost_tracking", "fieldtype": "Check", "label": "Enable Cost Tracking", "default": "1"},
-  {"fieldname": "enable_prompt_snapshotting", "fieldtype": "Check", "label": "Enable Prompt Snapshotting", "default": "1"},
-  {"fieldname": "enable_erp_diff_capture", "fieldtype": "Check", "label": "Enable ERP Diff Capture", "default": "1"},
-  {"fieldname": "enable_memory_snapshotting", "fieldtype": "Check", "label": "Enable Memory Snapshotting", "default": "1"},
-  {"fieldname": "section_security", "fieldtype": "Section Break", "label": "Security"},
-  {"fieldname": "allow_proprietary_models", "fieldtype": "Check", "label": "Allow Proprietary Models", "default": "1"},
-  {"fieldname": "canonical_seed", "fieldtype": "Int", "label": "Canonical Seed", "default": "42"},
-  {"fieldname": "external_worker_callback_secret_reference", "fieldtype": "Data", "label": "External Worker Callback Secret Reference", "description": "Key/reference only. Do not store the secret value itself here; resolve from site config or environment."}
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled",
+   "default": "1"
+  },
+  {
+   "fieldname": "default_lab_company",
+   "fieldtype": "Link",
+   "label": "Default Lab Company",
+   "options": "Company"
+  },
+  {
+   "fieldname": "default_timezone",
+   "fieldtype": "Data",
+   "label": "Default Timezone",
+   "default": "UTC"
+  },
+  {
+   "fieldname": "default_provider_profile",
+   "fieldtype": "Link",
+   "label": "Default Provider Profile",
+   "options": "EORL Model Profile"
+  },
+  {
+   "fieldname": "section_execution",
+   "fieldtype": "Section Break",
+   "label": "Execution Defaults"
+  },
+  {
+   "fieldname": "default_max_episode_steps",
+   "fieldtype": "Int",
+   "label": "Default Max Episode Steps",
+   "default": "50"
+  },
+  {
+   "fieldname": "default_wallclock_timeout_seconds",
+   "fieldtype": "Int",
+   "label": "Default Wallclock Timeout (s)",
+   "default": "300"
+  },
+  {
+   "fieldname": "local_run_worker_queue",
+   "fieldtype": "Data",
+   "label": "Local Run Worker Queue",
+   "default": "eorl"
+  },
+  {
+   "fieldname": "max_parallel_local_runs",
+   "fieldtype": "Int",
+   "label": "Max Parallel Local Runs",
+   "default": "1"
+  },
+  {
+   "fieldname": "section_observability",
+   "fieldtype": "Section Break",
+   "label": "Observability"
+  },
+  {
+   "fieldname": "default_event_storage_mode",
+   "fieldtype": "Select",
+   "label": "Default Event Storage Mode",
+   "options": "Frappe DB\nJSONL\nBoth",
+   "default": "Frappe DB"
+  },
+  {
+   "fieldname": "artifact_export_root",
+   "fieldtype": "Data",
+   "label": "Artifact Export Root"
+  },
+  {
+   "fieldname": "enable_cost_tracking",
+   "fieldtype": "Check",
+   "label": "Enable Cost Tracking",
+   "default": "1"
+  },
+  {
+   "fieldname": "enable_prompt_snapshotting",
+   "fieldtype": "Check",
+   "label": "Enable Prompt Snapshotting",
+   "default": "1"
+  },
+  {
+   "fieldname": "enable_erp_diff_capture",
+   "fieldtype": "Check",
+   "label": "Enable ERP Diff Capture",
+   "default": "1"
+  },
+  {
+   "fieldname": "enable_memory_snapshotting",
+   "fieldtype": "Check",
+   "label": "Enable Memory Snapshotting",
+   "default": "1"
+  },
+  {
+   "fieldname": "section_security",
+   "fieldtype": "Section Break",
+   "label": "Security"
+  },
+  {
+   "fieldname": "allow_proprietary_models",
+   "fieldtype": "Check",
+   "label": "Allow Proprietary Models",
+   "default": "1"
+  },
+  {
+   "fieldname": "canonical_seed",
+   "fieldtype": "Int",
+   "label": "Canonical Seed",
+   "default": "42"
+  },
+  {
+   "fieldname": "external_worker_callback_secret_reference",
+   "fieldtype": "Data",
+   "label": "External Worker Callback Secret Reference",
+   "description": "Key/reference only. Do not store the secret value itself here; resolve from site config or environment."
+  },
+  {
+   "fieldname": "section_reviewer",
+   "fieldtype": "Section Break",
+   "label": "Reviewer Walkthrough"
+  },
+  {
+   "fieldname": "reviewer_walkthrough_json",
+   "fieldtype": "Code",
+   "options": "JSON",
+   "label": "Reviewer Walkthrough Records",
+   "description": "Names of the records the Reviewer Start Here page opens (architecture, llm_run, episode, process_run, branch_parent, branch_children, analysis_plan, analysis_result, export_run). Missing keys are filled with the most recent matching record."
+  }
  ],
  "permissions": [
-  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
-  {"role": "EORL Administrator", "read": 1, "write": 1, "create": 1, "delete": 0}
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "EORL Administrator",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 0
+  }
  ]
 }

@@ -9,7 +9,10 @@ import frappe
 # communication tool (V2 sections 9, 15). The split only decides which
 # events/limits apply -- the actual allow/deny is always the per-actor
 # EORL Tool Policy's allowed_semantic_tools, never this set membership.
-READ_TOOLS = {"get_supplier_options", "get_purchase_order", "get_receipt_status", "inspect_received_goods"}
+READ_TOOLS = {
+	"get_supplier_options", "get_purchase_order", "get_receipt_status", "inspect_received_goods",
+	"get_customer_order", "get_sales_order", "get_delivery_status",
+}
 WRITE_TOOLS = {
 	"create_purchase_order",
 	"submit_purchase_order",
@@ -20,6 +23,14 @@ WRITE_TOOLS = {
 	"create_payment_entry",
 	"submit_payment_entry",
 	"escalate_quality_exception",
+	"create_sales_order",
+	"submit_sales_order",
+	"create_delivery_note",
+	"submit_delivery_note",
+	"create_sales_invoice",
+	"submit_sales_invoice",
+	"create_customer_payment",
+	"submit_customer_payment",
 }
 # Neither read nor write for budget purposes -- a message is its own
 # category (V2 section 9), gated by may_message_agents, not by the

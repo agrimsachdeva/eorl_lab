@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use EORL in research, please cite it as below."
+title: "EORL: Executable Organizational Routine Laboratory"
+abstract: "Research infrastructure for executable organizational theory: configurable organizational architectures on ERPNext, computational actors, counterfactual branching, an append-only process trace and design-aware inference."
+type: software
+authors:
+  - family-names: Sachdeva
+    given-names: Agrim
+    affiliation: University of Arizona
+version: 0.1-stage1
+date-released: 2026-11-01
+license: MIT
+repository-code: "https://github.com/agrimsachdeva/eorl_lab"
+keywords:
+  - organizational theory
+  - organizational routines
+  - computational experiments
+  - counterfactual simulation
+  - ERPNext

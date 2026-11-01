@@ -19,6 +19,7 @@ class ModelResponse:
 	token_counts: dict = field(default_factory=dict)
 	latency_ms: Optional[float] = None
 	provider_request_id: Optional[str] = None
+	retry_count: int = 0
 
 
 class ModelProvider(ABC):

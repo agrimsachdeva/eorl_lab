@@ -44,4 +44,5 @@ Generated directly from each DocType's JSON definition (`docs/gen_doctype_docs.p
 ## Other
 
 - [EORL Metric](eorl_metric.md)
+- [EORL Routine Template](eorl_routine_template.md)
 - [EORL Settings](eorl_settings.md)

@@ -122,7 +122,11 @@ def launch_pilot(experiment_name: str, repetitions: int = None) -> dict:
 						f"architecture resolved (no 'architecture' factor in it and no architecture_a fallback)."
 					)
 
-				result = run_architecture(architecture, seed=seed, episode_count=exp.episode_count or 1, regime_shift=regime_shift)
+				cell_label = ",".join(f"{n}={r.level_label}" for n, r in cell.items())
+				result = run_architecture(
+					architecture, seed=seed, episode_count=exp.episode_count or 1, regime_shift=regime_shift,
+					actor_engine=exp.get("actor_engine"), experiment=exp.name, cell_id=f"{cell_label}|rep{rep}",
+				)
 				launched.append(
 					{
 						"cell": {name: row.level_label for name, row in cell.items()},
@@ -149,6 +153,9 @@ def launch_pilot(experiment_name: str, repetitions: int = None) -> dict:
 					seed=seed,
 					episode_count=exp.episode_count or 1,
 					regime_shift=exp.regime_shift,
+					actor_engine=exp.get("actor_engine"),
+					experiment=exp.name,
+					cell_id=f"{architecture}|rep{rep}",
 				)
 				launched.append(
 					{
@@ -256,4 +263,45 @@ def compile_theory(
 	return {
 		"experiment": experiment.name, "analysis_plan": plan.name,
 		"outcome_metric_guessed": outcome_metric_was_guessed, "next_steps": next_steps,
+	}
+
+
+@frappe.whitelist()
+def estimate_experiment_cost(experiment_name: str) -> dict:
+	"""Submission-day plan section 23: expected model calls, tokens and
+	wallclock time for an experiment's full design, from the per-episode
+	averages of completed runs of the same architectures. Architectures
+	with no completed run yet are reported as having no basis rather
+	than guessed."""
+	frappe.only_for(["System Manager", "EORL Administrator", "EORL Researcher", "EORL Viewer"])
+	exp = frappe.get_doc("EORL Experiment", experiment_name)
+	reps = exp.repetitions_per_cell or 1
+	episodes = exp.episode_count or 1
+	cells = exp.factorial_cells()
+	if cells:
+		architectures = [_resolve_cell(exp, cell)[0] for cell in cells]
+	else:
+		architectures = [a for a in [exp.architecture_a, exp.architecture_b] if a]
+
+	per_arch, totals = [], {"model_calls": 0.0, "total_tokens": 0.0, "wallclock_seconds": 0.0}
+	for architecture in architectures:
+		runs = frappe.db.sql(
+			"""select name, model_calls, total_tokens, wallclock_seconds, current_episode from `tabEORL Run`
+			where status='completed' and wallclock_seconds > 0 and current_episode > 0
+			and architecture_snapshot_json like %s""",
+			(f'%"name": "{architecture}"%',), as_dict=True,
+		)
+		if not runs:
+			per_arch.append({"architecture": architecture, "basis_runs": 0})
+			continue
+		n_ep = sum(r.current_episode for r in runs)
+		rate = {k: sum((r.get(k) or 0) for r in runs) / n_ep for k in totals}
+		projected = {k: v * episodes * reps for k, v in rate.items()}
+		for k in totals:
+			totals[k] += projected[k]
+		per_arch.append({"architecture": architecture, "basis_runs": len(runs), "per_episode": rate, "projected": projected})
+	return {
+		"experiment": exp.name, "runs_planned": len(architectures) * reps, "episodes_per_run": episodes,
+		"by_architecture": per_arch, "projected_total": totals,
+		"projected_hours": totals["wallclock_seconds"] / 3600.0,
 	}

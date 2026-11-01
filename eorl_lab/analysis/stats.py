@@ -456,3 +456,122 @@ def kaplan_meier_recovery(durations: List[float], event_observed: List[int]) -> 
 		"n_events": int(sum(event_observed)),
 		"n_censored": int(len(event_observed) - sum(event_observed)),
 	}
+
+
+# ---------------------------------------------------------------------------
+# Submission-day additions: effect-size intervals, multiplicity
+# correction, and reproducible power planning for both designs.
+# ---------------------------------------------------------------------------
+
+DEFAULT_BOOTSTRAP_SEED = 20261101
+
+
+def hedges_g_bootstrap_ci(a: List[float], b: List[float], paired: bool = False, n_resamples: int = 5000,
+	seed: Optional[int] = DEFAULT_BOOTSTRAP_SEED, confidence_level: float = 0.95, min_valid_share: float = 0.9) -> dict:
+	"""Percentile bootstrap confidence interval for Hedges' g
+	(paired_hedges_g when `paired`). Groups are resampled independently
+	with replacement (the within-pair differences when paired), with a
+	fixed `seed` so the interval is reproducible.
+
+	A resample in which the pooled (or difference) standard deviation is
+	zero has no defined g. Such resamples are dropped rather than scored
+	as 0, which would pull the interval toward zero, and the share kept
+	is reported as `valid_share`. If fewer than `min_valid_share` of the
+	resamples are usable, or the observed samples have no variance, the
+	interval is reported as undefined. With very small groups the
+	percentile interval is itself rough; it is a description of
+	precision, not a test."""
+	point = paired_hedges_g(a, b) if paired else hedges_g(a, b)
+	out = {"effect_size": point, "ci_low": None, "ci_high": None, "method": "undefined",
+		"n_resamples": n_resamples, "seed": seed, "confidence_level": confidence_level, "valid_share": None}
+
+	rng = np.random.default_rng(seed)
+	with np.errstate(divide="ignore", invalid="ignore"):
+		if paired:
+			d = np.asarray([x - y for x, y in zip(a, b)], dtype=float)
+			n = len(d)
+			if n < 2 or np.var(d) == 0:
+				return out
+			sample = d[rng.integers(0, n, size=(n_resamples, n))]
+			sd = sample.std(axis=1, ddof=1)
+			g = sample.mean(axis=1) / sd * (1.0 - 3.0 / (4.0 * (n - 1) - 1.0))
+		else:
+			x, y = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
+			n_x, n_y = len(x), len(y)
+			if n_x < 2 or n_y < 2 or (np.var(x) == 0 and np.var(y) == 0):
+				return out
+			sx = x[rng.integers(0, n_x, size=(n_resamples, n_x))]
+			sy = y[rng.integers(0, n_y, size=(n_resamples, n_y))]
+			pooled = np.sqrt(((n_x - 1) * sx.var(axis=1, ddof=1) + (n_y - 1) * sy.var(axis=1, ddof=1)) / (n_x + n_y - 2))
+			g = (sx.mean(axis=1) - sy.mean(axis=1)) / pooled * (1.0 - 3.0 / (4.0 * (n_x + n_y - 2) - 1.0))
+
+	valid = g[np.isfinite(g)]
+	out["valid_share"] = len(valid) / n_resamples
+	if out["valid_share"] < min_valid_share:
+		out["method"] = "undefined (too many degenerate resamples)"
+		return out
+	tail = (1.0 - confidence_level) / 2.0
+	out.update({"ci_low": float(np.quantile(valid, tail)), "ci_high": float(np.quantile(valid, 1.0 - tail)), "method": "bootstrap_percentile"})
+	return out
+
+
+ADJUSTMENT_METHODS = {"none": None, "holm": "holm", "benjamini_hochberg": "fdr_bh", "bonferroni": "bonferroni"}
+
+
+def adjust_p_values(p_values: List[float], method: str = "holm", alpha: float = 0.05) -> dict:
+	"""Family-wise (Holm, Bonferroni) or false-discovery-rate
+	(Benjamini-Hochberg) adjustment via statsmodels. `none` returns the
+	raw values. None entries (undefined p-values) pass through as None
+	and are not counted in the family size."""
+	if method not in ADJUSTMENT_METHODS:
+		raise ValueError(f"Unknown adjustment method {method!r}; use one of {sorted(ADJUSTMENT_METHODS)}")
+	defined = [(i, p) for i, p in enumerate(p_values) if p is not None]
+	adjusted: List[Optional[float]] = [None] * len(p_values)
+	if ADJUSTMENT_METHODS[method] is None or not defined:
+		for i, p in defined:
+			adjusted[i] = p
+	else:
+		from statsmodels.stats.multitest import multipletests
+
+		_reject, corrected, _a, _b = multipletests([p for _, p in defined], alpha=alpha, method=ADJUSTMENT_METHODS[method])
+		for (i, _p), q in zip(defined, corrected):
+			adjusted[i] = float(q)
+	return {"method": method, "alpha": alpha, "family_size": len(defined), "raw_p": list(p_values), "adjusted_p": adjusted}
+
+
+def simulate_paired_power(standardized_effect: float, n_pairs: int, alpha: float = 0.05, n_simulations: int = 2000, seed: Optional[int] = None) -> dict:
+	"""Monte Carlo power for the paired t-test compare_groups runs on
+	sibling branches. `standardized_effect` is d_z, the mean of the
+	within-pair differences in units of their standard deviation."""
+	if n_pairs < 2:
+		raise ValueError("simulate_paired_power needs n_pairs >= 2")
+	generator = np.random.default_rng(seed)
+	significant = 0
+	for _ in range(n_simulations):
+		b = generator.normal(0.0, 1.0, size=n_pairs)
+		a = b + generator.normal(standardized_effect, 1.0, size=n_pairs)
+		if paired_t_test(list(a), list(b))["p_value"] < alpha:
+			significant += 1
+	return {"standardized_effect": standardized_effect, "n_pairs": n_pairs, "alpha": alpha,
+		"n_simulations": n_simulations, "power": significant / n_simulations}
+
+
+def power_grid(effects: List[float], ns: List[int], design: str = "independent", alpha: float = 0.05,
+	n_simulations: int = 2000, seed: int = DEFAULT_BOOTSTRAP_SEED) -> list:
+	"""A table of simulated power over effect sizes and sample sizes,
+	each cell with its Monte Carlo standard error sqrt(p(1-p)/n_sim).
+	Every cell uses the same `seed`, so the same inputs always return the
+	same table."""
+	if design not in ("independent", "paired"):
+		raise ValueError("design must be 'independent' or 'paired'")
+	rows = []
+	for effect in effects:
+		for n in ns:
+			if design == "paired":
+				res = simulate_paired_power(effect, n, alpha=alpha, n_simulations=n_simulations, seed=seed)
+			else:
+				res = simulate_power(effect, n, alpha=alpha, n_simulations=n_simulations, seed=seed)
+			p = res["power"]
+			rows.append({"design": design, "standardized_effect": effect, "n_per_condition": n, "power": p,
+				"mc_standard_error": (p * (1 - p) / n_simulations) ** 0.5, "n_simulations": n_simulations, "seed": seed})
+	return rows

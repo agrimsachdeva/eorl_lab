@@ -25,8 +25,7 @@ def inspect_received_goods(purchase_receipt: str, _case: dict = None) -> dict:
 	ground_truth = ((_case or {}).get("latent_ground_truth") or {}).get(supplier, {})
 	quality_probability = ground_truth.get("quality_probability", 1.0)
 
-	case_hash = (_case or {}).get("case_hash", "no-case")
-	rng = random.Random(f"{case_hash}:{purchase_receipt}:quality_inspection")
+	rng = random.Random(_quality_draw_key(_case or {}, supplier, purchase_receipt))
 	quality_passed = rng.random() < quality_probability
 	units_rejected = 0 if quality_passed else max(1, round(total_qty * (1 - quality_probability)))
 
@@ -37,6 +36,19 @@ def inspect_received_goods(purchase_receipt: str, _case: dict = None) -> dict:
 		"units_rejected": units_rejected,
 		"units_total": total_qty,
 	}
+
+
+def _quality_draw_key(case: dict, supplier: str, purchase_receipt: str) -> str:
+	"""Submission-day plan section 21. Under the matched outcome model the
+	draw depends on the scenario case (which fixes seed and episode) and
+	the supplier, so the same supplier in the same case gives the same
+	uniform draw under any architecture, and the shock changes only the
+	threshold it is compared to (common random numbers across regimes).
+	The legacy model keyed on the receipt name, so two arms that made the
+	same choice could meet different outcomes."""
+	if case.get("outcome_model", "receipt_keyed_v1") == "receipt_keyed_v1":
+		return f"{case.get('case_hash', 'no-case')}:{purchase_receipt}:quality_inspection"
+	return f"{case.get('case_id')}:{case.get('seed')}:{case.get('episode')}:{supplier}:quality_inspection"
 
 
 def escalate_quality_exception(purchase_receipt: str, units_rejected: int) -> dict:

@@ -3,6 +3,7 @@ import frappe
 
 @frappe.whitelist()
 def list_episodes(run: str) -> list:
+	frappe.only_for(["System Manager", "EORL Administrator", "EORL Researcher", "EORL Viewer"])
 	return frappe.get_all(
 		"EORL Episode",
 		filters={"run": run},
@@ -17,6 +18,7 @@ def get_episode_trace(episode: str) -> dict:
 	reconstruction of one episode from raw EORL Event rows -- the same
 	rows Milestones 2-5 have been writing all along, just read back in
 	order."""
+	frappe.only_for(["System Manager", "EORL Administrator", "EORL Researcher", "EORL Viewer"])
 	ep = frappe.get_doc("EORL Episode", episode)
 	events = frappe.get_all(
 		"EORL Event",

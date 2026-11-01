@@ -10,4 +10,6 @@ provider from its `EORL Model Profile` via
 
 ::: eorl_lab.providers.deterministic
 
+::: eorl_lab.providers.bounded_rational
+
 ::: eorl_lab.providers.openai_compatible

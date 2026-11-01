@@ -10,6 +10,8 @@
   "architecture_name",
   "description",
   "coordination_mode",
+  "routine_template",
+  "stage_gated_tools",
   "central_coordinator_slot",
   "actor_slots",
   "communication_policy",
@@ -25,27 +27,145 @@
   "approval_graph_json"
  ],
  "fields": [
-  {"fieldname": "architecture_name", "fieldtype": "Data", "label": "Architecture Name", "reqd": 1, "unique": 1},
-  {"fieldname": "description", "fieldtype": "Small Text", "label": "Description"},
-  {"fieldname": "coordination_mode", "fieldtype": "Select", "label": "Coordination Mode", "options": "specialist_handoff\nbroad_autonomy", "reqd": 1, "in_list_view": 1},
-  {"fieldname": "central_coordinator_slot", "fieldtype": "Data", "label": "Central Coordinator Slot"},
-  {"fieldname": "actor_slots", "fieldtype": "Table", "label": "Actor Slots", "options": "EORL Architecture Actor Slot"},
-  {"fieldname": "communication_policy", "fieldtype": "Link", "label": "Communication Policy", "options": "EORL Communication Policy", "description": "SOTA Milestone 1: the actually-enforced communication graph for agent-chosen messaging (eorl_lab.organization.communication.message_agent). Supersedes communication_edges_json below, which stays inert JSON."},
-  {"fieldname": "process_grammar", "fieldtype": "Link", "label": "Process Grammar", "options": "EORL Process Grammar", "description": "SOTA Milestone 1: optional override of the default tool->stage mapping used when extracting this architecture's runs' process paths. Leave blank to use eorl_lab.analysis.paths.PROCESS_STAGE_BY_TOOL."},
-  {"fieldname": "section_graphs", "fieldtype": "Section Break", "label": "Structural Graphs", "collapsible": 1, "description": "Deliberately stored as plain JSON for now. These become editable node-edge graphs with the Architecture Designer (a later milestone); the orchestrator does not read them yet beyond coordination_mode, actor_slots, communication_policy, and process_grammar."},
-  {"fieldname": "supervision_edges_json", "fieldtype": "Code", "label": "Supervision Edges (JSON)", "options": "JSON"},
-  {"fieldname": "communication_edges_json", "fieldtype": "Code", "label": "Communication Edges (JSON, unused -- see communication_policy)", "options": "JSON"},
-  {"fieldname": "workflow_handoff_rules_json", "fieldtype": "Code", "label": "Workflow Handoff Rules (JSON)", "options": "JSON"},
-  {"fieldname": "decision_right_assignments_json", "fieldtype": "Code", "label": "Decision-Right Assignments (JSON)", "options": "JSON"},
-  {"fieldname": "shared_memory_assignment_json", "fieldtype": "Code", "label": "Shared-Memory Assignment (JSON)", "options": "JSON"},
-  {"fieldname": "allowed_cross_stage_actions_json", "fieldtype": "Code", "label": "Allowed Cross-Stage Actions (JSON)", "options": "JSON"},
-  {"fieldname": "escalation_graph_json", "fieldtype": "Code", "label": "Escalation Graph (JSON)", "options": "JSON"},
-  {"fieldname": "approval_graph_json", "fieldtype": "Code", "label": "Approval Graph (JSON)", "options": "JSON"}
+  {
+   "fieldname": "architecture_name",
+   "fieldtype": "Data",
+   "label": "Architecture Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "coordination_mode",
+   "fieldtype": "Select",
+   "label": "Coordination Mode",
+   "options": "specialist_handoff\nbroad_autonomy",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "routine_template",
+   "fieldtype": "Link",
+   "label": "Routine Template",
+   "options": "EORL Routine Template",
+   "description": "Blank means Procure-to-Pay, the routine every architecture used before templates existed."
+  },
+  {
+   "fieldname": "stage_gated_tools",
+   "fieldtype": "Check",
+   "label": "Stage-Gated Tools (Matched Tool Ecology)",
+   "description": "Broad autonomy only. At each step the single actor is offered, and authorized for, only the tools of the routine's current stage, the same set the specialist for that stage holds. Removes the tool-breadth difference between the architectures while keeping actor continuity."
+  },
+  {
+   "fieldname": "central_coordinator_slot",
+   "fieldtype": "Data",
+   "label": "Central Coordinator Slot"
+  },
+  {
+   "fieldname": "actor_slots",
+   "fieldtype": "Table",
+   "label": "Actor Slots",
+   "options": "EORL Architecture Actor Slot"
+  },
+  {
+   "fieldname": "communication_policy",
+   "fieldtype": "Link",
+   "label": "Communication Policy",
+   "options": "EORL Communication Policy",
+   "description": "SOTA Milestone 1: the actually-enforced communication graph for agent-chosen messaging (eorl_lab.organization.communication.message_agent). Supersedes communication_edges_json below, which stays inert JSON."
+  },
+  {
+   "fieldname": "process_grammar",
+   "fieldtype": "Link",
+   "label": "Process Grammar",
+   "options": "EORL Process Grammar",
+   "description": "SOTA Milestone 1: optional override of the default tool->stage mapping used when extracting this architecture's runs' process paths. Leave blank to use eorl_lab.analysis.paths.PROCESS_STAGE_BY_TOOL."
+  },
+  {
+   "fieldname": "section_graphs",
+   "fieldtype": "Section Break",
+   "label": "Structural Graphs",
+   "collapsible": 1,
+   "description": "Deliberately stored as plain JSON for now. These become editable node-edge graphs with the Architecture Designer (a later milestone); the orchestrator does not read them yet beyond coordination_mode, actor_slots, communication_policy, and process_grammar."
+  },
+  {
+   "fieldname": "supervision_edges_json",
+   "fieldtype": "Code",
+   "label": "Supervision Edges (JSON)",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "communication_edges_json",
+   "fieldtype": "Code",
+   "label": "Communication Edges (JSON, unused -- see communication_policy)",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "workflow_handoff_rules_json",
+   "fieldtype": "Code",
+   "label": "Workflow Handoff Rules (JSON)",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "decision_right_assignments_json",
+   "fieldtype": "Code",
+   "label": "Decision-Right Assignments (JSON)",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "shared_memory_assignment_json",
+   "fieldtype": "Code",
+   "label": "Shared-Memory Assignment (JSON)",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "allowed_cross_stage_actions_json",
+   "fieldtype": "Code",
+   "label": "Allowed Cross-Stage Actions (JSON)",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "escalation_graph_json",
+   "fieldtype": "Code",
+   "label": "Escalation Graph (JSON)",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "approval_graph_json",
+   "fieldtype": "Code",
+   "label": "Approval Graph (JSON)",
+   "options": "JSON"
+  }
  ],
  "permissions": [
-  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
-  {"role": "EORL Administrator", "read": 1, "write": 1, "create": 1, "delete": 1},
-  {"role": "EORL Researcher", "read": 1, "write": 1, "create": 1, "delete": 0},
-  {"role": "EORL Viewer", "read": 1}
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "EORL Administrator",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "EORL Researcher",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 0
+  },
+  {
+   "role": "EORL Viewer",
+   "read": 1
+  }
  ]
 }

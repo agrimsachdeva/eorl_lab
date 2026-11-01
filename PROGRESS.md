@@ -25,6 +25,21 @@ whitelisted API functions, 15 semantic ERP tools. The Milestone 1 to 8 text
 below is the record as written on 2026-10-29 and has not been edited. What
 changed afterwards is tracked in "V1 gap list: status today" near the end.
 
+Since SOTA Milestone 10 there is a hosted demonstration site
+(`eorl-demo.localhost`) and a pre-registered pilot with language-model actors:
+16 runs, 96 episodes, Qwen3 27B for every actor. It is the first evidence from
+model-driven runs and it bears on proposition P1 only. See "After SOTA 10:
+hosted demo and language-model pilot". The Word submissions in
+`~/eorl_docx_updated/` (v3 files) report the same results.
+
+The submission-day build (same day) implemented the Stage 1 plan: a second
+routine, routine templates, three actor engines, matched exogenous
+outcomes, a path-invalidating shock, registered sequence views,
+attribute-level coherence, repertoire v2, more executable constructs,
+multiplicity correction, effect-size intervals, interpretation rules, the
+reviewer pages and the release documents. See "Submission-day build". The
+Word submissions predate it and do not describe it.
+
 ## Contents
 
 - At a glance
@@ -32,6 +47,8 @@ changed afterwards is tracked in "V1 gap list: status today" near the end.
 - Milestone 0: environment, migration and repository setup
 - Milestones 1 to 8 (the original V1 build)
 - After Milestone 8: SOTA Milestones 1 to 10
+- After SOTA 10: hosted demo and language-model pilot
+- Submission-day build (2026-11-01)
 - Commit timeline
 - What exists now (inventory)
 - Reference runs
@@ -660,6 +677,361 @@ Theory Compiler is a structured wizard, not an autonomous generator.
 
 ---
 
+## After SOTA 10: hosted demo and language-model pilot
+
+Written 2026-11-01 while preparing the Stage 1 submission to the Organization
+Science special issue. Until this point the only evidence was validation of
+the instrument with scripted actors, which says nothing about the theory. The
+work below adds a clean hosted site for reviewers and the first language-model
+comparison. None of it is committed to git yet (see "Open items today").
+
+### Hosted demonstration site
+
+- A second Frappe site, `eorl-demo.localhost`, on port 8002 of the same bench.
+  It holds synthetic data only: a fictitious company, two milk suppliers and
+  one stock item (MILK-001). It does not contain the participant data on
+  `erpnext.localhost`, which stays on port 8001 and is not exposed.
+- Reachable on the tailnet only. A supervisor script outside the repository
+  (`~/eorl_live/eorl_live_ctl.sh start|stop|status`) runs both servers.
+  Credentials are in `~/eorl_live/credentials.env`, mode 600.
+- A read-only reviewer account holds the EORL Viewer role. It can read every
+  EORL record and run the analysis pages, but cannot open Experiment Studio,
+  launch runs or change configuration.
+- The model key is held in site configuration under the name the Model
+  Profile gives (`qwen_api_key`), never in a DocType field, and is not
+  committed.
+- The scripts that built the site and ran the pilot are in `pilot/` (see
+  `pilot/README.md`): `demo_setup.py`, `demo_seed.py`, `pilot_setup.py`,
+  `pilot_prereg.py`, `pilot_smoke.py`, `pilot_run.py`, `pilot_analyze.py`.
+
+Run numbers on the demo site, which differ from the dev site above:
+
+| Runs | What they are |
+|---|---|
+| RUN-00001 to RUN-00010 | Scripted runs, five specialist and five broad, behind the positive control |
+| RUN-00011 | 30 scripted episodes with ground-truth-driven exceptions (3 quality exceptions, entropy 0.469, modal-path share 0.900) |
+| RUN-00012 | Branch child of RUN-00001 that switches to broad autonomy at episode 2 |
+| RUN-00013 to RUN-00016 | Smoke checks of the model engine before the pilot. RUN-00013 failed at the output-token limit. None is analyzed. |
+| RUN-00017 to RUN-00032 | The 16 pilot runs |
+| RUN-00033 | Second branch child of RUN-00001, continuing specialist handoff, created after the pilot |
+
+### The pilot
+
+- **Design.** Specialist Handoff (four role-bounded actors, each with the
+  tools of one stage) against Broad Autonomy (one actor with all thirteen
+  tools). The same Qwen3 27B profile for every actor (temperature 0.6,
+  thinking on), no memory, no `message_agent` tool, the same instruction
+  preface. Seeds 7100 to 7107, each run under both architectures with the
+  order alternating by repetition, six episodes per run, no regime shift. The
+  16 runs are the independent units.
+- **Registration.** The Experiment, its hypotheses, an interpretation rule and
+  three Analysis Plans were stored before the first run was created (the
+  timestamps are about nine seconds apart). The record is internal to the
+  site. It is not in an external registry.
+- **Primary measures.** Modal-path share and sequence entropy per run, from
+  tool-result events (`finish_turn` is excluded). Equivalence bounds of
+  ±0.17 and ±0.65 bits, each the change produced when one of six episodes
+  leaves the modal path. Actor continuity is a manipulation check.
+- **Tests.** Welch, permutation (10,000 resamples), Hedges' g and TOST at
+  run level, unpaired, because the quality outcome of a receipt is drawn from
+  the receipt's name and so does not match across arms.
+- **Cost.** A six-episode run took 596 to 685 seconds under Specialist
+  Handoff and 390 to 497 under Broad Autonomy, about 2.4 hours of model time
+  for the 16 runs. 54 runs of that length would take about 8 hours.
+
+| Measure | Specialist | Broad | Difference [95% CI] | Welch p / permutation p | Equivalence (TOST) |
+|---|---|---|---|---|---|
+| Modal-path share | 0.54 (SD 0.17) | 0.85 (0.19) | -0.31 [-0.51, -0.12] | .004 / .015 | Not established, p = .932 |
+| Sequence entropy (bits) | 1.26 (0.47) | 0.40 (0.45) | 0.86 [0.37, 1.35] | .002 / .002 | Not established, p = .816 |
+| Actor continuity (check) | 0.75 (0.004) | 1.00 (0.000) | -0.25 | < .001 / < .001 | Not applicable |
+
+Hedges' g was -1.64 for modal-path share and 1.78 for entropy (point
+estimates, no interval computed). All 96 episodes completed the purchase
+order, receipt, invoice and payment, and no tool call was denied. Every
+episode chose the same supplier, so the second supplier was never used.
+Episodes held 15.6 tool calls (SD 0.6) under Specialist Handoff and 11.1 (0.4)
+under Broad Autonomy, counting `finish_turn`. A quality exception arose in 3
+of 48 specialist and 7 of 48 broad episodes (Fisher p = .32), and each was
+escalated.
+
+**How to read it.** As registered, hypothesis H1 holds: Broad Autonomy had a
+higher modal-path share and lower entropy, and equivalence was not
+established. That counts against the rival constraint-dominance account's
+prediction of no difference. The recorded interpretation rule covers only
+equivalence on both measures and a failure of equivalence without a
+significant difference, so it has no case for this outcome.
+
+It is weak evidence for P1, because the difference comes from optional
+read-only calls. In 24 of 48 specialist episodes the accounts-payable actor
+called `get_receipt_status` before invoicing, and in 3 of 48 the warehouse
+actor read the purchase order a second time. No broad episode did either,
+though the broad actor held the same tools. The registered measures count
+those calls, so an optional check split many specialist runs between two
+paths. A post hoc check (designed after seeing the data, not registered)
+removed the three read-only tools from every sequence. Modal-path share was
+then 0.94 under Specialist Handoff and 0.85 under Broad Autonomy (Welch p =
+.28, permutation p = .44), and entropy was 0.24 and 0.40 bits (p = .44 and
+.52). Both differences changed sign and neither is reliable.
+
+The accounts-payable instruction also does not mention receipt status while
+the broad instruction lists every step, so the pilot cannot separate role
+boundaries from instruction wording or from the number of actors. The two
+architectures differ in actors, tool breadth and handoffs, so the pilot
+compares bundles of design features and does not isolate autonomy.
+
+**What it does not cover.** P2 (memory) is untested because no memory
+conditions were run. P3 (adaptation) is untested because there is no
+supplier-quality shock. There is one model, one routine and one scenario.
+These need the Stage 2 designs: a broad variant with matched tools, a shock
+that invalidates previously successful paths, memory conditions, more runs
+(27 per architecture for an effect of 0.8), non-LLM baselines and a second
+model family.
+
+### Other work in the same stretch
+
+- The full test suite was re-run on 2026-11-01 on `erpnext.localhost`:
+  `Ran 140 tests in 453.059s ... OK`.
+- New figures for the appendix: a branch diagram, a development-progress
+  figure, a screenshots composite built from the hosted site (Scientific
+  Cockpit and a pilot run in Process Explorer), and a pilot results figure
+  with registered and post hoc panels.
+- Word submissions v3 (`~/eorl_docx_updated/`): the proposal has a pilot
+  paragraph, and the Technical Appendix has Section 7.4 (the pilot) and
+  Section 11 (prototype access and technical specification, with 11.4 on
+  reproducing the pilot). Run identifiers in both match the hosted site.
+  `CHANGELOG.md` in that folder lists the changes and what needs author
+  confirmation.
+
+---
+
+## Submission-day build (2026-11-01)
+
+Built from `EORL_SUBMISSION_DAY_IMPLEMENTATION_PLAN.md` for the Stage 1
+submission. The organizing rule was the plan's: EORL is the contribution,
+and agentic routinization is its first demonstration. Plan section numbers
+are given in brackets.
+
+### What was built
+
+| Area | What exists now |
+|---|---|
+| Platform vs demonstration [1.1, 13, 29] | `experiment_type` (infrastructure_validation, theory_demonstration, empirical_study) and `demonstration` on EORL Experiment. The Lab home page lists building blocks and demonstrations separately. Runs carry `experiment` and `cell_id`, closing the long-open gap. |
+| Second routine [2.1, 15] | `EORL Routine Template` DocType (stage order, roles, handoff keys, per-stage tools, scenario generator, terminal conditions). The orchestrator no longer names a routine. Procure-to-Pay and Order-to-Cash ship as templates with process grammars. Order-to-cash has its own scenario generator, eleven ERP tools (sales order, delivery note, sales invoice, customer payment) and a non-stock sales item, so it leaves MILK-001 untouched. |
+| Terminal conditions | An episode counts as complete only if the routine's end state holds. Previously a broad actor that called `finish_turn` early would have been recorded as a success. |
+| Constructs [3.1] | `status` on EORL Construct. Three existing entries gained measurement functions (Centralization, Specialization, Information asymmetry) and four executable entries were added (Sequential variety, Routine concentration, Attribute-level path coherence, Communication centralization): 9 of 12 entries are executable, 3 remain conceptual. Functions in `eorl_lab.analysis.constructs`. Citations given only where certain; Information asymmetry says "to be completed by the author". |
+| Attribute-level coherence [4.1] | `path_coherence_v1` over eight attributes and a composite (`eorl_lab.analysis.attribute_coherence`). The docstring and the registry entry say the formula is an EORL operationalization not verified against the cited paper's estimator. |
+| Path-invalidating shock [5.1] | Regime shifts can declare `pre_shock_latent_ground_truth` and `post_shock_latent_ground_truth`. The demonstration reversal: Bloomington Dairy quality 0.95 to 0.58, Indiana Foods 0.78 to 0.91 at episode 7. `get_supplier_options` now returns the scenario's candidate suppliers, so latent parameters apply on any site (on `erpnext.localhost` it had been returning whatever suppliers ERPNext listed). |
+| Adaptive repertoire [6.1] | Repertoire v2: observed, viable (completed, no hard violation, utility at least 0.9) and activated-after-shock paths kept apart, with utilization, retention, reuse, novelty, extinction and activation latency. Shock adaptation: pre-shock dominant path and supplier mix, episodes to first adaptive and to stable new path (both require viability), performance deficit. Outcome utility v1 = 1 minus the share of units rejected. |
+| Memory manipulation [7.1] | SD-B below. `configuration_difference` confirms the memory and no-memory branches differ only in four `memory_profile_config` fields. |
+| Matched-tools condition [8.1] | `stage_gated_tools` on EORL Architecture: one actor, offered and authorized only the current stage's tools. The gate is enforced outside the model (`STAGE_GATED` denials). |
+| Non-LLM baseline [9.1] | `actor_engine` chosen independently of architecture: `scripted_deterministic`, `bounded_rational` (new, `eorl_lab.providers.bounded_rational`), `llm`. |
+| Multiplicity [10.1] | `adjustment_method` with `multiple_testing_family`; Holm, Benjamini-Hochberg, Bonferroni via statsmodels; adjusted p written to each family member's primary result. |
+| Effect-size CI [11.1] | Seeded percentile bootstrap for Hedges' g (paired and unpaired). Degenerate resamples are dropped and the kept share reported; the interval is undefined below 90%. |
+| Power planning [12.1] | `random_seed`; seeded power tables for independent and paired designs with Monte Carlo standard errors; the page no longer hard-codes 0.8. Same seed, same table (tested). |
+| Reviewer page, matrix [13, 15] | `/app/eorl-reviewer` (eleven steps, each resolved to a real record from `EORL Settings.reviewer_walkthrough_json`) and `/app/eorl-evaluation-matrix` (eight criteria, live counts). |
+| Read-only reviewer [14] | `compare_groups` and `compute_run_metrics` compute but do not persist without create permission. Role checks on the twelve whitelisted read functions that lacked them. Model Profile `base_url` and `api_key_reference` moved to permission level 1, which the Viewer role cannot read; model events record the profile name, not the URL. |
+| Release [16, 17] | README rewritten; QUICKSTART, REVIEWER_GUIDE, ARCHITECTURE, REPRODUCIBILITY, LIMITATIONS, LICENSE, CHANGELOG, CITATION.cff; `scripts/generate_artifact_manifest.py` writes `artifact_manifest.json`. |
+| Export [18] | `public/js/eorl_export.js`: CSV with metadata header lines, JSON, copy-specification, on Process Explorer, Adaptation View, Scientific Cockpit, Power Planner and Evaluation Matrix. Metadata carries run IDs, plan, scope, metric version and timestamp. PNG/SVG export is not built. |
+| Sequence views [19] | Action taxonomy (sense, decide, execute, verify, approve, communicate, control) and `sequence_scope` on the Analysis Plan: all_actions, consequential_actions, write_actions, actor_function_actions. Scoped metrics are stored as `metric@scope`. |
+| Interpretation rules [20] | Structured rule fields on the Analysis Plan and `interpretation_combination` (AND, OR, weighted, separate) on the Experiment. A test enumerates every combination of significance, direction and equivalence and checks each maps to one of four labels. |
+| Matched outcomes [21] | Outcome model `matched_v2`: the inspection draw is keyed on case and supplier, not on the receipt name. Set after hashing, so existing case hashes are unchanged. Old runs reproduce with `receipt_keyed_v1`. |
+| Exogenous/endogenous [22] | Every `environment_observed` event carries `exogenous_state` and the list of endogenous sources. |
+| Telemetry [23] | Per model call: tokens, latency, retries, profile. Per run: model calls, input/output/total tokens, retries, wallclock. `estimate_experiment_cost` and its display in Experiment Studio. |
+| Queue [24] | `eorl_lab.api.queue` (enqueue run, enqueue experiment, cancel, list). Cancellation is checked between episodes through the cache. Needs a `bench worker --queue long`, which the live supervisor does not start. |
+| Failure taxonomy [25] | `failure_type`, `retryable`, `retry_count` on EORL Run; `failure_type` and `utility` on EORL Episode. |
+| UI fixes | Cockpit shows p below 0.0001 in scientific notation, g with its interval, adjusted p and the interpretation label. Trace Explorer marks success or failure only on events that carry an outcome. |
+
+Not built from the plan: a second model family [26], Sankey, motifs and
+clustering [27, Tier 5], PNG/SVG figure export [18].
+
+### Problems found and fixed during the build
+
+| Problem | Fix |
+|---|---|
+| Frappe 14 Float columns are NOT NULL, so every undefined value had been stored as 0: a NaN p-value from a zero-variance comparison, `episodes_to_recover_90pct` for a run that never recovered, information asymmetry for a one-actor organization. This predates today. | `EORL Metric.value_undefined` and `EORL Analysis Result.undefined_fields` flag them; `_run_level_metric` refuses an undefined value; p-values are read from `diagnostics_json`, which holds null. Rows written before the fix cannot be told apart from true zeros; recomputing a run's metrics writes flagged rows, and the newest row is the one read. |
+| The first version of the effect-size bootstrap scored degenerate resamples as g = 0, which pinned interval bounds at exactly 0. | Degenerate resamples dropped and counted (above). |
+| `evaluate_experiment_interpretation` read the 0.0 stored in `adjusted_p_value` for plans with no family as p = 0, and looked for the TOST by timestamp, which missed it. | Adjusted p is used only when the result has a family; the TOST is matched by run IDs. Regression test added. |
+| `episodes_to_first_adaptive_path` counted a quality-exception path (different but worse) as adaptation. | Adaptive and stable new paths must be viable. |
+| While switching the recovery metrics to utility, `success_rate` was briefly computed from utility too; the full suite caught it. On the demo site this wrote wrong `success_rate` rows for the SD runs only, and no stored plan reads that metric. | Fixed and covered by a test; the SD runs' metrics were recomputed, and the newest row is the one read. |
+| A metric row written for a run that was later rolled back could be read for a new run that received the same name. | Metric lookups accept only rows created after the run itself. |
+| A cancel flag left in Redis by a rolled-back test run cancelled the next run that reused its name. | A newly created run clears any flag under its name. |
+| Frappe 14 `enqueue` has no `job_id`/`deduplicate` arguments; they would have been passed to the job function. | Uses `job_name`. |
+| A Server Script on `User` on `erpnext.localhost` (from the erp_research data) fails with `__import__ not found`, so a test cannot create a user there. | The read-only test patches the permission check and separately asserts from DocPerm that EORL Viewer has no write, create, delete, submit or cancel on any EORL DocType. |
+
+Changed definitions, versioned: the recovery metrics now use
+utility and carry `v2+utility`; every other existing metric keeps `v1`.
+Repertoire v2 metrics carry `v2+viability:v2`; scoped metrics add
+`+scope:<scope>+taxonomy:v1`; construct metrics `constructs:v1`.
+
+### Demonstration runs on the hosted site
+
+All on `eorl-demo.localhost`. Experiments, plans and interpretation rules
+were stored by `eorl_lab.demonstrations.submission_day.setup()` before any
+run. Five seeds, 8101 to 8105. Labeled throughout as demonstration or
+validation, not tests of the theory.
+
+| Design | Runs | What it shows |
+|---|---|---|
+| SD-A, infrastructure_validation, scripted | RUN-00034 to RUN-00043: 5 specialist, 5 broad, 6 episodes | Matched outcomes: in all 30 episode pairs, same supplier and identical inspection result. Actor continuity 0.709 vs 1.000 (manipulation check, Welch p = 2.0e-7). Consequential-action entropy identical across arms (0.460 vs 0.460, TOST equivalence established). |
+| SD-D, infrastructure_validation, scripted | RUN-00044 to RUN-00047: order-to-cash, 2 specialist, 2 broad, 3 episodes | Second routine runs end to end through the same orchestrator. All 12 episodes completed. |
+| SD-B, theory_demonstration, bounded-rational | Parents RUN-00048, 51, 54, 57, 60 (episodes 1 to 6, pre-shock, with memory); each branched at episode 6 into a memory child (RUN-00049, 52, 55, 58, 61) and a no-memory child (RUN-00050, 53, 56, 59, 62) for episodes 7 to 12 after the reversal | Post-shock mean utility 0.888 (memory) vs 0.874 (no memory), paired t p = .37, Holm-adjusted .75; the g interval is undefined because most within-pair differences are exactly 0. Registered label: inconclusive on both outcomes. In rep 1 the memory child switched to Indiana Foods and stayed (IBIIII); its no-memory sibling went back to Bloomington (IBBBBB). In the other reps the two siblings behaved identically. |
+| SD-C, theory_demonstration, bounded-rational | RUN-00063 to RUN-00077: specialist, broad and broad with matched tools, 5 reps each, 12 episodes, reversal at 7 | Post-shock mean utility 0.874 (specialist) vs 0.888 (broad), Welch p = .55, Holm-adjusted 1.0; performance deficit likewise. Broad and matched-tools broad were identical in every run (the non-semantic engine follows stage order either way), mean difference 0, TOST not established with n = 5. All three registered labels: inconclusive. Only rep 1 shows the mechanism: an exploration draw sent every arm to Indiana Foods at episode 7; after the next Bloomington failure the broad actor, which sees inspections, switched for good (BBBBBBIBIIII), while the specialist purchasing actor, which never sees them, returned to Bloomington. |
+
+Reading. The instrument produced and measured everything it was meant to:
+matched exogenous outcomes, a shock that changes which supplier is better,
+branch-matched memory conditions confirmed by manifest, repertoire and
+adaptation measures, family-adjusted tests and registered labels. The
+designs are too small to show an effect: with a three-record memory window
+and a 0.58 post-shock quality, two failures inside the window, which the
+learner needs before it switches, were rare in six post-shock episodes.
+The engine and the registered plans were not changed after seeing this.
+
+Record-keeping notes. `analyze()` was run twice. The first batch of SD
+results (08:23 UTC) used the first bootstrap implementation, whose
+intervals were biased toward 0; the second batch is current, and family
+adjustment and the interpretation endpoint read the latest batch. Both are
+kept. `set_reviewer_walkthrough()` points the reviewer page at the Qwen3
+pilot (its specialist architecture, RUN-00017, plan "Pilot P1: modal path
+share" and its first Welch result), RUN-00001's branches, RUN-00064 for adaptation and RUN-00044 for
+the second routine. The backfill patch `v2_backfill_run_provenance` set
+`actor_engine` and `routine_template` on the 33 runs that predate them,
+from the model profiles named in their own snapshots.
+
+### Change log by file
+
+Every file the build added or changed. Paths are relative to the
+repository root; `eorl_lab/` below is the Python package. 65 tracked files
+changed (4,411 lines added, 665 removed) and 35 paths were added. Nothing
+was committed during the build.
+
+#### New Python modules
+
+| File | Contents |
+|---|---|
+| `eorl_lab/analysis/taxonomy.py` | `TOOL_CATEGORY` (sense, decide, execute, verify, approve, communicate, control for all 26 tools), `TOOL_OBJECT_TYPE`, `TOOL_DECISION_DOMAIN`, `SEQUENCE_SCOPES` (all_actions, consequential_actions, write_actions, actor_function_actions), `DECISION_ATTRIBUTE_BY_TOOL` (supplier for `create_purchase_order`, customer for `create_sales_order`), `in_scope()`, `scope_metric_name()` (`metric@scope`), `TAXONOMY_VERSION = "v1"`. |
+| `eorl_lab/analysis/attribute_coherence.py` | `attribute_coherence(events, scope)`: share of consecutive action pairs within an episode sharing each of eight attributes (actor, role, stage, object_type, counterparty, exception_state, tool_family, decision_domain), averaged over episodes, plus an unweighted composite. `PATH_COHERENCE_VERSION = "path_coherence_v1"`. The docstring states the formula is an EORL adaptation. |
+| `eorl_lab/analysis/adaptation.py` | `shock_adaptation()`: pre-shock dominant path and its share, pre/post supplier distribution, post-shock share on the old path, episodes to first adaptive path and to stable new path (both require viability; stable window 3), pre/post mean utility, performance deficit. |
+| `eorl_lab/analysis/constructs.py` | `observed_state_variables`, `information_asymmetry` (1 minus mean pairwise Jaccard overlap), `authority_centralization` (normalized HHI per right over decision, approval, assignment), `tool_breadth_specialization`, `task_domain_entropy`, `communication_centralization` (Freeman degree). `CONSTRUCT_MEASURES_VERSION = "v1"`. |
+| `eorl_lab/analysis/interpretation.py` | `classify()` maps significance, direction and TOST verdict to consistent, inconsistent, inconclusive or not_evaluated through five rule fields (`DEFAULT_RULES`); `combine()` under AND, OR, weighted or separate. |
+| `eorl_lab/routines.py` | `BUILTIN_ROUTINES` for Procure-to-Pay and Order-to-Cash (stages with role, slot, handoff keys, tools, completion key; scenario generator; exogenous-state function; terminal conditions; outcome keys; broad slot and role; memory domain), `BUILTIN_GRAMMARS`, `resolve_routine()`, `required_tools()`, `seed_routine_templates()` (idempotent; creates grammars with stages and transitions, then templates). |
+| `eorl_lab/scenarios/order_to_cash.py` | `generate_case()` (customer alternates by seed and episode, qty 20 to 35, selling rate 1.25, latent `payment_reliability` not yet read by any tool), `exogenous_state()`, `ensure_master_data()` (creates customers "EORL Demo Customer" and "EORL Second Customer" and the non-stock sales item `EORL-O2C-TUB`). |
+| `eorl_lab/erp/selling.py` | Eleven order-to-cash tools: `get_customer_order`, `create_sales_order`, `get_sales_order`, `submit_sales_order`, `create_delivery_note`, `submit_delivery_note`, `get_delivery_status`, `create_sales_invoice`, `submit_sales_invoice`, `create_customer_payment`, `submit_customer_payment`. Documents are made with ERPNext's own mappers. |
+| `eorl_lab/providers/bounded_rational.py` | `BoundedRationalProvider(DeterministicProvider)`: supplier quality estimate (passes + 1) / (observations + 2) from the actor's recalled records that carry an inspection result, 0.5 for an unseen supplier, ties to the first listed; 10% exploration; optional checks taken with probability 0.5. All draws keyed on case id, seed and purpose, not on actor. `quality_evidence()`; `ENGINE_VERSION = "bounded_rational_v1"`. |
+| `eorl_lab/api/queue.py` | `enqueue_run`, `enqueue_experiment`, `cancel_run`, `list_queue`. Creates the run row as "queued", commits, and enqueues `orchestrator.run_queued` on the `long` queue with a 6-hour timeout. Cancellation sets a cache key `eorl_cancel:<run>` for 7 days. |
+| `eorl_lab/api/reviewer.py` | `get_reviewer_walkthrough` (eleven steps resolved from `EORL Settings.reviewer_walkthrough_json`, missing keys filled with the most recent matching record), `get_artifact_manifest`, `get_evaluation_matrix` (`EVALUATION_MATRIX`, eight criteria, live counts), `configuration_difference()` and `compare_run_configurations` (flattened field-by-field diff of two runs' frozen configuration, document names ignored, optional allowed prefixes). |
+| `eorl_lab/demonstrations/__init__.py`, `eorl_lab/demonstrations/submission_day.py` | `setup()` (profiles, memory profiles, the reversal regime shift, SD and O2C policies, agents and architectures, experiments SD-A to SD-D with their Analysis Plans; labels the two existing demo-site experiments), `run_experiment(key)` (SD-B as five parents branched into memory and no-memory children), `analyze()`, `verify_matched_outcomes()`, `set_reviewer_walkthrough()`. |
+| `eorl_lab/patches/v2_construct_registry_measures.py` | Updates Centralization, Specialization and Information asymmetry (measurement function, definition, citations, limits, status executable, version 2.0), Routine coherence (citation, 1.1), Adaptive repertoire (repertoire v2, 2.0); sets Formalization, Hierarchy and Transactive memory to conceptual; inserts Sequential variety, Routine concentration, Attribute-level path coherence and Communication centralization. |
+| `eorl_lab/patches/v2_seed_routine_templates.py` | Calls `seed_routine_templates()` and, where the company exists, `ensure_master_data()`. |
+| `eorl_lab/patches/v2_backfill_run_provenance.py` | Fills `actor_engine` and `routine_template` on runs that predate them, from the model profiles named in each run's frozen agent snapshot. |
+
+#### New DocType and pages
+
+| File | Contents |
+|---|---|
+| `eorl_lab/eorl_lab/doctype/eorl_routine_template/` (`.json`, `.py`, `__init__.py`) | DocType EORL Routine Template, named by `routine_name`: version, domain, description, process_grammar, required_tools, default_roles, `stage_sequence_json` (required), scenario_generator (required), exogenous_state_function, terminal_conditions, outcome_keys, broad_slot, broad_role, memory_domain, default_metrics. Viewer read-only. The controller validates each stage has role, slot, tools and completes_on and that the generator path resolves; `to_definition()` returns the plain dict the orchestrator uses. |
+| `eorl_lab/eorl_lab/page/eorl_reviewer/` | Page `eorl-reviewer`, "Reviewer Walkthrough, approximate time 5 minutes": what EORL is, the demonstration label, whether the account is read-only, artifact commit and test count, eleven step cards with an Open button each. All four EORL roles. |
+| `eorl_lab/eorl_lab/page/eorl_evaluation_matrix/` | Page `eorl-evaluation-matrix`: criterion, capability, evidence, verification path, limitation; export buttons. |
+| `eorl_lab/public/js/eorl_export.js` | `eorl_lab.export.csv` (metadata as `# key: value` lines), `json`, `copy`, `buttons(page, getter)` adding Download CSV, Download JSON and Copy specification under an Export menu. Loaded through `app_include_js`. |
+
+#### Changed Python modules
+
+| File | Change |
+|---|---|
+| `eorl_lab/runtime/orchestrator.py` | Imports `routines`, `time`, `engine_type_of`. Adds `FAILURE_TYPES`, `RETRYABLE_FAILURE_TYPES`, `_classify_provider_failure`, `_classify_tool_failure`, `_cancel_requested`. `_run_actor_turn` gains `tool_gate`, returns a fourth value (failure type), filters offered tools by the gate and denies gated-out tools with `STAGE_GATED`, times each provider call, accumulates tokens, latency and retries into `ctx.telemetry`, logs them on `model_response` with the profile name, and marks denials expected or unexpected from `ctx.expected_denial_codes`. `_summarize_actor_action` appends `;quality:passed|failed` when the actor saw the inspection, with a generic `completed:` fallback. `_retrieve_memory` and `_write_memory` take a domain. `_SPECIALIST_SEQUENCE` replaced by the routine's stages; new `_episode_outcome` (terminal-condition check, utility, failure reason and type), `_stage_gate`. `_run_specialist_episode` and `_run_broad_autonomy_episode` take routine and engine override; broad takes `stage_gated`. Snapshots add `model_profile_config`, `memory_profile_config`, `tool_policy_config` (`_profile_config`, `_tool_policy_config`). `_run_episode_loop` takes routine, outcome model and stage gating; resolves the generator from the routine; writes `environmental_state_hash`, `utility`, `failure_type`; logs `exogenous_state` and `endogenous_state_sources`; honors cancellation between episodes; writes status "cancelled", failure type, retryable, model calls, tokens, retries and wallclock to the run. New `_regime_shift_payload`, `_scenario_snapshot`, `_code_commit`, `_configured_engine`, `run_queued`. `run_architecture` gains `actor_engine`, `outcome_model`, `experiment`, `cell_id`, `existing_run`, `expected_denial_codes`, records scenario snapshot, routine, engine and code commit, and clears a stale cancel flag on a new run. `branch_run` keeps the source run's outcome model, engine and experiment. |
+| `eorl_lab/runtime/authority.py` | Order-to-cash reads added to `READ_TOOLS`, writes to `WRITE_TOOLS`. |
+| `eorl_lab/scenarios/procurement.py` | `copy.deepcopy` of the base case (the shallow copy would have let overrides mutate it). `OUTCOME_MODELS`, `DEFAULT_OUTCOME_MODEL = "matched_v2"`. `generate_case` gains `outcome_model`, applies `pre_shock_latent_ground_truth` / `post_shock_latent_ground_truth`, applies `qty_multiplier` only after the trigger as before, and sets `outcome_model` after hashing. New `_apply_ground_truth_override`, `exogenous_state`. |
+| `eorl_lab/erp/stock.py` | `_quality_draw_key`: matched model keys on case id, seed, episode and supplier; legacy model keeps the receipt-name key. |
+| `eorl_lab/erp/buying.py` | `get_supplier_options` takes `_case` and returns the scenario's candidate suppliers that exist in ERPNext; falls back to the old lookup without a case. |
+| `eorl_lab/erp/registry.py` | Registers the eleven order-to-cash tools. |
+| `eorl_lab/analysis/paths.py` | `PROCESS_STAGE_BY_TOOL` adds `finish_turn: CONTROL` and the order-to-cash stages. `CanonicalActionEvent` adds `category`, `attributes`, `decision_value`. `_payload()`; `extract_canonical_events` builds attribute vectors with supplier and exception state carried forward within an episode; `scoped_events()`; `process_path(..., scope)` with `_token()` (annotation outside all_actions; ROLE:action for actor_function_actions). |
+| `eorl_lab/analysis/repertoire.py` | Appended `VIABILITY_CRITERION_V2`, `DEFAULT_UTILITY_THRESHOLD = 0.9`, `episode_utility`, `is_viable_v2`, `adaptive_repertoire`. Existing functions unchanged. |
+| `eorl_lab/analysis/stats.py` | Appended `DEFAULT_BOOTSTRAP_SEED = 20261101`, `hedges_g_bootstrap_ci` (seeded percentile bootstrap, degenerate resamples dropped, `valid_share`, undefined below 0.9), `ADJUSTMENT_METHODS`, `adjust_p_values` (statsmodels `multipletests`), `simulate_paired_power`, `power_grid`. Existing functions unchanged. |
+| `eorl_lab/api/metrics.py` | `METRIC_VERSION` stays `v1`; `RECOVERY_METRIC_VERSION = "v2+utility"` for the four recovery metrics; versions for repertoire v2, construct and scoped metrics; public `metric_version()`. `_episode_data` fetches `payload_json`. `compute_run_metrics`: persists only with create permission on EORL Metric; recovery metrics on utility, `success_rate` on the success flag; adds `mean_utility`, the four sequence metrics for each non-default scope, `path_coherence_v1` with per-attribute values for all and consequential scopes, repertoire v2, shock adaptation, five construct metrics. `_save_metric` sets `value_undefined`. New `_chosen_counterparty`, `_authority_configuration`. Role check on `compare_runs`. |
+| `eorl_lab/api/analysis.py` | `READ_ROLES`, `_PRIMARY_TEST`, `_plan_metric_name` (scoped names), `_primary_test_name`, `_can_persist`. `_run_level_metric` reads the newest row created after the run and refuses undefined values. `_save_analysis_result` writes the g interval, sequence scope, family, primary flag, interpretation label, adjusted p and `undefined_fields`, and the per-metric definition version. `compare_groups`: role check; seeded permutation tests; bootstrap g interval; primary test; in-memory family adjustment; interpretation; saves only with create permission; returns `persisted`, `metric_name`, `sequence_scope`, `standardized_effect_ci`, `primary_test`, `interpretation`, `multiplicity`. Episode-level path also respects permission. New `_interpret`, `_latest_primary_results` (raw p from diagnostics), `_family_adjustment`, `apply_family_adjustment`, `evaluate_experiment_interpretation` (TOST matched by run IDs; adjusted p only with a family), `compute_power_grid`. `compute_power_analysis` takes seed and design and returns the Monte Carlo error; `compute_required_sample_size` takes a seed. Replication and jackknife use scoped names. Results table export gains eleven columns. |
+| `eorl_lab/api/process.py` | `_run_level_metric_json` reads only rows newer than the run. `get_process_explorer_data(run, scope)`: DFG, variants, swimlane with category and choice, summary, actor and functional continuity and `path_coherence_v1`. `get_adaptation_view_data`: per-episode utility, chosen supplier, viability and pre-shock membership; repertoire and shock-adaptation summaries. Survival analysis on utility. Role checks added. |
+| `eorl_lab/api/experiments.py` | `launch_pilot` passes `actor_engine`, `experiment` and `cell_id`. New `estimate_experiment_cost`. |
+| `eorl_lab/api/runs.py`, `api/traces.py`, `api/exports.py` | Role checks on `list_runs`, `get_run_detail`, `get_branch_history`, `list_branch_groups`, `list_episodes`, `get_episode_trace`, `export_run_bundle`. |
+| `eorl_lab/providers/deterministic.py` | `_choose_supplier` parses `ordered_from:X;quality:...`. New hook methods `_choose_supplier` and `_wants_check`; the PO review, PO confirmation and receipt confirmation reads go through `_wants_check`. Order-to-cash policies for Sales, Fulfillment, Billing and General Order agents (`_o2c_next` and step lists). |
+| `eorl_lab/providers/factory.py` | `ACTOR_ENGINES`, `engine_type_of`, `engine_override` argument, `bounded_rational` provider. `llm` refuses a non-generative profile. |
+| `eorl_lab/providers/openai_compatible.py`, `providers/base.py` | Latency measured per call, `retry_count` on `ModelResponse`. |
+| `eorl_lab/observability/context.py` | `telemetry`, `expected_denial_codes`, `engine_override` on `ExperimentContext`. |
+| `eorl_lab/observability/exporter.py` | Manifest adds experiment, cell, routine, engine, scenario snapshot, code commit at launch, failure type, telemetry. Scenario stream uses the run's generator and outcome model. |
+| `eorl_lab/observability/replay.py` | Reproduces with the original outcome model (`receipt_keyed_v1` when no snapshot) and scripted or bounded-rational engine. |
+| `eorl_lab/hooks.py` | `app_include_js = "/assets/eorl_lab/js/eorl_export.js"`. |
+| `eorl_lab/install.py` | `after_install` also runs the v2 construct update and routine seeding. |
+| `eorl_lab/patches.txt` | Three v2 patches added. |
+
+#### Changed DocType schemas
+
+| DocType | Fields added or changed |
+|---|---|
+| EORL Experiment | `experiment_type`, `demonstration`, `actor_engine`, `interpretation_combination`. |
+| EORL Analysis Plan | `sequence_scope`, `adjustment_method`, `random_seed`; section Registered Interpretation with `expected_direction`, `rival_prediction`, `support_rule`, `contradiction_rule`, `equivalence_rule`, `inconclusive_rule`, `trivial_effect_rule`, `interpretation_weight`. |
+| EORL Analysis Result | `sequence_scope`, `family_id`, `adjustment_method`, `is_primary_test`, `effect_size_ci_low`, `effect_size_ci_high`, `effect_size_ci_method`, `interpretation_label`, `undefined_fields`; `p_value` relabeled "Raw p-value". |
+| EORL Construct | `status`; labels Measurement Definition, Manipulation Definition, Known Validity Limits. |
+| EORL Run | `experiment`, `cell_id`, `routine_template`, `actor_engine`, `failure_type`, `retryable`, `retry_count`, `input_tokens`, `output_tokens`, `model_calls`, `wallclock_seconds`; status option `cancelled`. |
+| EORL Episode | `utility`, `failure_type`. |
+| EORL Metric | `value_undefined`. |
+| EORL Architecture | `routine_template`, `stage_gated_tools`. |
+| EORL Model Profile | provider option `bounded_rational`; `base_url` and `api_key_reference` at permission level 1, with level-1 read/write for System Manager, EORL Administrator, EORL Researcher. |
+| EORL Settings | section Reviewer Walkthrough, `reviewer_walkthrough_json`. |
+
+#### Changed pages
+
+| Page | Change |
+|---|---|
+| EORL Lab | Reviewer banner; Building blocks (15 links, Routine Templates and Process Grammars added); Studio list adds Reviewer and Evaluation Matrix; Demonstrations section filtering experiments by demonstration and type. |
+| Process Explorer | Scope selector, summary cards, continuity and coherence table, variant table, utility column, supplier shown under the step, export, deep link from `route_options`. |
+| Adaptation View | Utility chart with viability-threshold marker, repertoire and shock-adaptation tables, supplier, viable and pre-shock-repertoire columns, export, deep link. |
+| Scientific Cockpit | Read-only notice, g with its interval and method, metric and primary test, interpretation card with family, raw and adjusted p, p below 0.0001 in scientific notation, run and plan links, export. |
+| Power Planner | Design, alpha, simulations and seed inputs; power table over effects and n with Monte Carlo errors; seeded required-N; export. |
+| Trace Explorer | Success and failure marks only on outcome-bearing event types; the failed-only filter follows the same rule. |
+| Experiment Studio | Cost and runtime estimate; Queue All Runs button. |
+
+#### Tests
+
+| File | Change |
+|---|---|
+| `eorl_lab/eorl_lab/doctype/eorl_run/test_eorl_submission_day.py` | New, 42 tests: sequence scopes (5), attribute coherence (2), repertoire and adaptation (3), construct measures and registry (5), inference (6), scenario and outcome model (4), bounded-rational engine (3), failure taxonomy and stage gate (2), integration (12: matched outcomes, order-to-cash, matched tools and telemetry, memory manipulation, expected and unexpected denials, queue and cancellation, Viewer DocPerm, no persistence without permission, family adjustment, interpretation with no family, undefined metric flag, success rate not utility). |
+| `test_eorl_construct_registry_and_factorial_experiments.py` | The unimplemented-construct test uses Formalization. |
+| `test_eorl_ground_truth_and_authority.py` | The grammar test skips stages outside its fixture. |
+
+#### Documentation and release files
+
+| File | Change |
+|---|---|
+| `README.md` | Rewritten to answer the six questions the plan lists, with a document table and the release tag. |
+| `QUICKSTART.md`, `REVIEWER_GUIDE.md`, `ARCHITECTURE.md`, `REPRODUCIBILITY.md`, `LIMITATIONS.md`, `CHANGELOG.md`, `CITATION.cff`, `LICENSE` | New (the license file names the author; `license.txt` is unchanged). |
+| `artifact_manifest.json` | New, from `scripts/generate_artifact_manifest.py`: 182 tests counted and passing, 27 DocTypes, 17 pages, 41 whitelisted functions, capability lists. Currently records commit 5ddf352 and a dirty tree; the freeze script regenerates it. |
+| `scripts/generate_artifact_manifest.py`, `scripts/freeze_release.sh` | New. The script refuses a dirty tree, writes the manifest, commits it alone and creates the annotated tag; it does not push. |
+| `release/stage1_test_run.log` | New: the final `Ran 182 tests in 530.432s ... OK` log. |
+| `docs/guide/stage1-additions.md` | New guide page, added to `mkdocs.yml`. |
+| `docs/index.md` | Framed as research infrastructure; Demonstration 1 named as a use. |
+| `docs/reference/analysis.md`, `api.md`, `providers.md`, `scenarios.md` | New modules added to the API reference. |
+| `docs/doctypes/*.md` | Regenerated by `docs/gen_doctype_docs.py` (28 pages, one new). `mkdocs build --strict` passes. |
+| `docs/history/progress.md` | Copy of this file. |
+| `pilot/` | Unchanged; still untracked and ready to commit. |
+| `EORL_SUBMISSION_DAY_IMPLEMENTATION_PLAN.md` | The plan itself, untracked. |
+
+#### Changes to site data
+
+| Site | Change |
+|---|---|
+| `erpnext.localhost` | Migrated three times. Patches seeded the routine templates, grammars and two customers and updated the Construct Registry; the backfill patch set engine and routine on older runs. `EORL-O2C-TUB` is created by the tests' setup. Smoke and debug runs were rolled back. |
+| `eorl-demo.localhost` | Migrated three times. `setup()` created the SD and O2C profiles, policies, agents, architectures, the regime shift "Supplier Quality Reversal at Episode 7", experiments SD-A to SD-D and seven Analysis Plans, and set `experiment_type` on the two existing experiments. Runs RUN-00034 to RUN-00077. Two analysis batches (the first superseded). The SD runs' metrics were recomputed after the success-rate fix. `reviewer_walkthrough_json` set. The reviewer account's roles were not changed. |
+
+### Tests
+
+The full suite was run on 2026-11-01 on `erpnext.localhost` after the last code change:
+`Ran 182 tests in 530.432s ... OK` (log in `release/stage1_test_run.log`). 140 tests
+existed before the build; 42 are new, in `test_eorl_submission_day.py`. Two
+older tests were changed because the facts they pinned changed on purpose: the
+unimplemented-construct test now uses Formalization (Centralization gained a
+measure), the grammar test skips stages outside its fixture (finish_turn and
+order-to-cash tools).
+
+---
+
 ## Commit timeline
 
 23 commits on `main`. The net diff from the scaffold commit to HEAD is 259
@@ -706,7 +1078,7 @@ Counted from the repository on agrim on 2026-11-01.
 below, 3,876 in tests and 208 in DocType controllers. 1,778 lines of
 JavaScript for the Desk pages and 1,113 lines of DocType JSON.
 
-### DocTypes (26)
+### DocTypes (27)
 
 | Introduced | DocTypes |
 |---|---|
@@ -720,8 +1092,9 @@ JavaScript for the Desk pages and 1,113 lines of DocType JSON.
 | SOTA 2 | EORL Branch |
 | SOTA 4 | EORL Construct, EORL Experiment Factor (child) |
 | SOTA 5 | EORL Analysis Plan, EORL Analysis Result |
+| Submission day | EORL Routine Template |
 
-19 standalone DocTypes, 6 child tables, 1 single. Roles `EORL Researcher`,
+20 standalone DocTypes, 6 child tables, 1 single. Roles `EORL Researcher`,
 `EORL Administrator` and `EORL Viewer` ship as fixtures. The only data
 shipped in code is those roles and the 8 constructs seeded by the patch
 `eorl_lab.patches.v1_seed_initial_constructs`. `bench install-app` marks every
@@ -731,7 +1104,7 @@ began calling the same function. The `Demo ...` agents,
 architectures, regime shifts and experiments used in this document live in
 the site database. A fresh install would not have them.
 
-### Desk pages (15)
+### Desk pages (17)
 
 | Page | From | Purpose |
 |---|---|---|
@@ -750,8 +1123,10 @@ the site database. A fresh install would not have them.
 | Survival Analysis | SOTA 9 | Kaplan-Meier time to recovery |
 | Paired-Branch Inference | SOTA 10 | Sibling-branch picker feeding the paired test |
 | Theory Compiler | SOTA 10 | Scaffold an Experiment and an Analysis Plan from a theory |
+| Reviewer: Start Here (`eorl-reviewer`) | Submission day | Eleven-step guided walkthrough resolved to real records |
+| Evaluation Matrix (`eorl-evaluation-matrix`) | Submission day | Special-issue criteria, evidence, verification path, limitation |
 
-### Whitelisted API (29 functions in `eorl_lab.api`)
+### Whitelisted API (41 functions in `eorl_lab.api`; 29 before the submission-day build)
 
 | Module | Functions |
 |---|---|
@@ -762,8 +1137,9 @@ the site database. A fresh install would not have them.
 | `exports` | `export_run_bundle`, `download_full_bundle`, `reproduce_run` |
 | `analysis` | `compare_groups`, `export_results_table`, `compute_power_analysis`, `compute_required_sample_size`, `compute_replication_diagnostics`, `compute_robustness_jackknife`, `compute_qap_comparison` |
 | `process` | `get_process_explorer_data`, `get_network_explorer_data`, `get_adaptation_view_data`, `get_survival_analysis_data` |
+| Added on submission day | `analysis.apply_family_adjustment`, `analysis.evaluate_experiment_interpretation`, `analysis.compute_power_grid`, `experiments.estimate_experiment_cost`, `queue.enqueue_run`, `queue.enqueue_experiment`, `queue.cancel_run`, `queue.list_queue`, `reviewer.get_reviewer_walkthrough`, `reviewer.get_artifact_manifest`, `reviewer.get_evaluation_matrix`, `reviewer.compare_run_configurations` |
 
-### Semantic ERP tools (15 in the registry)
+### Semantic ERP tools (26 in the registry; 15 before the submission-day build)
 
 | Kind | Tools |
 |---|---|
@@ -772,6 +1148,7 @@ the site database. A fresh install would not have them.
 | Ground-truth driven (SOTA 1) | `inspect_received_goods`, `escalate_quality_exception` |
 | Communication (SOTA 1) | `message_agent` |
 | Control (SOTA 3) | `finish_turn` |
+| Order-to-cash (submission day) | `get_customer_order`, `get_sales_order`, `get_delivery_status`, `create_sales_order`, `submit_sales_order`, `create_delivery_note`, `submit_delivery_note`, `create_sales_invoice`, `submit_sales_invoice`, `create_customer_payment`, `submit_customer_payment` |
 
 Receipts, invoices and payments are created through ERPNext's own mapper
 functions, so tax, account and unit-of-measure resolution match what a user's
@@ -834,7 +1211,9 @@ Both spec documents are versioned in `docs/specs/`.
 ## Reference runs
 
 These exist in the site database on agrim only. A fresh install would not have
-them.
+them. The runs below are on `erpnext.localhost`. The hosted demo site has its
+own numbering, listed in "After SOTA 10: hosted demo and language-model
+pilot" (RUN-00017 to RUN-00032 there are the pilot).
 
 | Record | Milestone | What it shows |
 |---|---|---|
@@ -850,7 +1229,7 @@ them.
 
 ## Test coverage
 
-140 tests, all passing, in 21 test files. Run with
+182 tests, all passing, in 22 test files (140 before the submission-day build). Run with
 `bench --site erpnext.localhost run-tests --app eorl_lab`.
 
 **Original V1 files (33 tests).**
@@ -940,6 +1319,43 @@ code on 2026-11-01.
 
 ## Open items today
 
+### Status after the submission-day build
+
+Resolved on 2026-11-01 (details in "Submission-day build"): the demand
+shock that did not change success (a supplier-quality reversal now
+exists); no non-generative baseline (bounded-rational engine); 2 of 8
+executable constructs (now 9 of 12); attribute-level coherence not
+measured; no multiple-testing correction; two-group-only power planning
+(paired design added); EORL Run not linked to its experiment; no queued
+execution; the unseeded Power Planner page; p-values shown as 0.0000; the
+Trace Explorer red cross; the missing role checks; the reviewer able to
+read the model endpoint; reviewer comparisons writing Analysis Result
+rows; `pilot/` untracked (committed with this build); no second routine.
+
+Still open from the lists below: Mann-Whitney, Wilcoxon and Cox models;
+mixed effects beyond success rate; Experiment Studio's "architecture_a is
+required" on Theory Compiler drafts; the public route for reviewers;
+external workers and Parquet export; `anthropic`, `shared` and `vector`;
+`request_approval` and enforcement of decision and assignment rights;
+graphical studios; per-branch ERP isolation; a second model family; the
+decision-confidence placeholder; temporal motifs and sequence clustering.
+The Word submissions in `~/eorl_docx_updated/` predate this build.
+
+Found at the end of the build, not changed:
+
+- **The reviewer account is not read-only.** On `eorl-demo.localhost`,
+  `reviewer@example.org` holds `EORL Researcher` as well as `EORL Viewer`
+  (the Researcher role was added by Administrator at 06:49 on 2026-11-01).
+  With it the account can create and edit EORL records and its comparisons
+  are saved. Every read-only statement in the documents assumes the Viewer
+  role alone. Remove the Researcher role before sharing the login.
+- **The live servers still run the code from before the build.** They are
+  started with `--noreload`; restart them with `~/eorl_live/eorl_live_ctl.sh
+  stop` and `start` so the hosted site serves the new pages and endpoints.
+- **The background queue needs a worker** (`bench worker --queue long`); the
+  live supervisor starts web servers only.
+
+
 ### Science and design
 
 - The demand shock does not change success, so adaptation and repertoire
@@ -962,8 +1378,10 @@ code on 2026-11-01.
   model, power planning covers only the two-group Welch design, and the
   mixed-effects model covers success rate only.
 - Model-driven runs are not reproducible exactly, and `reproduce_run` works
-  only for scripted runs launched through `run_architecture`. There is one
-  live model episode and no multi-run model study.
+  only for scripted runs launched through `run_architecture`. The only
+  multi-run model evidence is the 16-run pilot (8 per architecture, one model,
+  one routine, one scenario), which is small and has the confound described
+  above.
 - Decision confidence is a fixed placeholder (0.7).
 
 ### Engineering
@@ -993,7 +1411,31 @@ code on 2026-11-01.
   record is a draft that the Theory Compiler scaffolded, and it has no
   architectures yet.
 
+### Found while building the hosted demo and the pilot (2026-11-01)
+
+- **Five whitelisted functions lack a role check** (`frappe.only_for`):
+  `list_runs`, `get_run_detail`, `list_episodes`, `get_episode_trace` and
+  `compare_groups`. The reviewer role can also read the Model Profile's
+  `base_url`. The key itself is in site config and is not readable. Neither
+  gap is fixed.
+- **No public route for reviewers.** The demo is tailnet-only, so reviewers
+  cannot reach it until a public route is chosen. The Word submissions say a
+  link and reviewer login go in the submission form.
+- **`pilot/` is untracked.** The scripts are in the working tree of the repo
+  on agrim but not committed, and Section 11.4 of the appendix says they are
+  in the repository. If the review is double-blind, the package metadata in
+  `pyproject.toml` carries the author's name and email.
+- **Do not re-run `pilot_analyze.py --full`.** It stores new Analysis Result
+  rows, and the pilot's results are already stored. Opening a comparison in
+  the Scientific Cockpit also stores a row each time, so the demo has a few
+  extra rows from the scripted positive control.
+- **Smoke runs RUN-00013 to RUN-00016 stay on the demo site.** RUN-00013
+  failed at the model's output-token limit. None enters an analysis.
+- **Pilot measures count optional read-only calls**, which is what produced
+  the pilot's difference. A future registration should say whether read-only
+  tools count in a path.
+
 ---
 
-*Last updated: 2026-11-01, after SOTA Milestone 10 and the Stage 1 submission
-audit. The Milestone 1 to 8 sections above are unchanged from 2026-10-29.*
+*Last updated: 2026-11-01, after the submission-day build.
+The Milestone 1 to 8 sections above are unchanged from 2026-10-29.*

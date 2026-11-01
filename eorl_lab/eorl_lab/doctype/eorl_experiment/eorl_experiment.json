@@ -9,6 +9,8 @@
  "field_order": [
   "experiment_name",
   "status",
+  "experiment_type",
+  "demonstration",
   "section_theory",
   "research_question",
   "theoretical_mechanism",
@@ -22,42 +24,209 @@
   "episode_count",
   "repetitions_per_cell",
   "seed_strategy",
+  "actor_engine",
   "base_seed",
   "section_factors",
   "factors",
   "section_notes",
   "model_replication_strategy",
   "stopping_rules",
-  "notes"
+  "notes",
+  "interpretation_combination"
  ],
  "fields": [
-  {"fieldname": "experiment_name", "fieldtype": "Data", "label": "Experiment Name", "reqd": 1, "unique": 1},
-  {"fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "draft\nvalidated\npilot_launched\ncompleted\nfailed", "default": "draft", "in_list_view": 1},
-  {"fieldname": "section_theory", "fieldtype": "Section Break", "label": "Theory"},
-  {"fieldname": "research_question", "fieldtype": "Small Text", "label": "Research Question"},
-  {"fieldname": "theoretical_mechanism", "fieldtype": "Small Text", "label": "Theoretical Mechanism"},
-  {"fieldname": "focal_construct", "fieldtype": "Link", "label": "Focal Construct", "options": "EORL Construct", "description": "V2 section 21 (Theory Compiler): the focal theoretical construct this experiment is designed to test. Optional and purely a link -- the structured wizard itself is a later milestone."},
-  {"fieldname": "primary_outcomes", "fieldtype": "Small Text", "label": "Primary Outcomes"},
-  {"fieldname": "pre_registered_hypotheses", "fieldtype": "Text", "label": "Pre-Registered Hypotheses / Competing Predictions"},
-  {"fieldname": "section_design", "fieldtype": "Section Break", "label": "Design"},
-  {"fieldname": "architecture_a", "fieldtype": "Link", "label": "Architecture A", "options": "EORL Architecture", "in_list_view": 1, "description": "Required unless an 'architecture' factor is defined below. Also used as the fallback architecture for any factorial cell that doesn't itself define an 'architecture' factor."},
-  {"fieldname": "architecture_b", "fieldtype": "Link", "label": "Architecture B (optional second level)", "options": "EORL Architecture"},
-  {"fieldname": "regime_shift", "fieldtype": "Link", "label": "Regime Shift", "options": "EORL Regime Shift", "description": "Fallback regime shift for any factorial cell that doesn't itself define a 'regime_shift' factor."},
-  {"fieldname": "episode_count", "fieldtype": "Int", "label": "Episodes Per Run", "default": "20"},
-  {"fieldname": "repetitions_per_cell", "fieldtype": "Int", "label": "Repetitions Per Cell", "default": "1"},
-  {"fieldname": "seed_strategy", "fieldtype": "Select", "label": "Seed Strategy", "options": "paired\nindependent", "default": "paired", "description": "paired: every cell in the same repetition shares a seed, so they see the identical exogenous scenario stream (spec section 18). independent: each cell gets its own seed offset."},
-  {"fieldname": "base_seed", "fieldtype": "Int", "label": "Base Seed", "default": "42"},
-  {"fieldname": "section_factors", "fieldtype": "Section Break", "label": "Factorial Design (optional)", "collapsible": 1, "description": "SOTA Milestone 4 (V2 section 28.7): generalizes architecture_a/architecture_b into real N-factor, K-level designs. Leave empty to keep the original 1-factor/2-level architecture_a-vs-architecture_b behavior unchanged; populate to run the full cartesian product of every distinct factor_name's levels instead."},
-  {"fieldname": "factors", "fieldtype": "Table", "label": "Factors", "options": "EORL Experiment Factor"},
-  {"fieldname": "section_notes", "fieldtype": "Section Break", "label": "Notes", "collapsible": 1},
-  {"fieldname": "model_replication_strategy", "fieldtype": "Small Text", "label": "Model Replication Strategy"},
-  {"fieldname": "stopping_rules", "fieldtype": "Small Text", "label": "Stopping Rules"},
-  {"fieldname": "notes", "fieldtype": "Text", "label": "Notes"}
+  {
+   "fieldname": "experiment_name",
+   "fieldtype": "Data",
+   "label": "Experiment Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "draft\nvalidated\npilot_launched\ncompleted\nfailed",
+   "default": "draft",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "experiment_type",
+   "fieldtype": "Select",
+   "label": "Experiment Type",
+   "options": "infrastructure_validation\ntheory_demonstration\nempirical_study",
+   "default": "infrastructure_validation",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "infrastructure_validation: checks that the instrument works (scripted actors). theory_demonstration: illustrates what a theory looks like when executed; not a test of it. empirical_study: a registered test of a proposition."
+  },
+  {
+   "fieldname": "demonstration",
+   "fieldtype": "Data",
+   "label": "Demonstration",
+   "in_standard_filter": 1,
+   "description": "The demonstration this experiment belongs to, e.g. 'Demonstration 1: Agentic Routinization and Adaptive Repertoire'. Blank for platform validation."
+  },
+  {
+   "fieldname": "section_theory",
+   "fieldtype": "Section Break",
+   "label": "Theory"
+  },
+  {
+   "fieldname": "research_question",
+   "fieldtype": "Small Text",
+   "label": "Research Question"
+  },
+  {
+   "fieldname": "theoretical_mechanism",
+   "fieldtype": "Small Text",
+   "label": "Theoretical Mechanism"
+  },
+  {
+   "fieldname": "focal_construct",
+   "fieldtype": "Link",
+   "label": "Focal Construct",
+   "options": "EORL Construct",
+   "description": "V2 section 21 (Theory Compiler): the focal theoretical construct this experiment is designed to test. Optional and purely a link -- the structured wizard itself is a later milestone."
+  },
+  {
+   "fieldname": "primary_outcomes",
+   "fieldtype": "Small Text",
+   "label": "Primary Outcomes"
+  },
+  {
+   "fieldname": "pre_registered_hypotheses",
+   "fieldtype": "Text",
+   "label": "Pre-Registered Hypotheses / Competing Predictions"
+  },
+  {
+   "fieldname": "section_design",
+   "fieldtype": "Section Break",
+   "label": "Design"
+  },
+  {
+   "fieldname": "architecture_a",
+   "fieldtype": "Link",
+   "label": "Architecture A",
+   "options": "EORL Architecture",
+   "in_list_view": 1,
+   "description": "Required unless an 'architecture' factor is defined below. Also used as the fallback architecture for any factorial cell that doesn't itself define an 'architecture' factor."
+  },
+  {
+   "fieldname": "architecture_b",
+   "fieldtype": "Link",
+   "label": "Architecture B (optional second level)",
+   "options": "EORL Architecture"
+  },
+  {
+   "fieldname": "regime_shift",
+   "fieldtype": "Link",
+   "label": "Regime Shift",
+   "options": "EORL Regime Shift",
+   "description": "Fallback regime shift for any factorial cell that doesn't itself define a 'regime_shift' factor."
+  },
+  {
+   "fieldname": "episode_count",
+   "fieldtype": "Int",
+   "label": "Episodes Per Run",
+   "default": "20"
+  },
+  {
+   "fieldname": "repetitions_per_cell",
+   "fieldtype": "Int",
+   "label": "Repetitions Per Cell",
+   "default": "1"
+  },
+  {
+   "fieldname": "seed_strategy",
+   "fieldtype": "Select",
+   "label": "Seed Strategy",
+   "options": "paired\nindependent",
+   "default": "paired",
+   "description": "paired: every cell in the same repetition shares a seed, so they see the identical exogenous scenario stream (spec section 18). independent: each cell gets its own seed offset."
+  },
+  {
+   "fieldname": "actor_engine",
+   "fieldtype": "Select",
+   "label": "Actor Engine",
+   "options": "as_configured\nscripted_deterministic\nbounded_rational\nllm",
+   "default": "as_configured",
+   "description": "Chosen independently of the organizational architecture. as_configured uses each Agent Template's own Model Profile."
+  },
+  {
+   "fieldname": "base_seed",
+   "fieldtype": "Int",
+   "label": "Base Seed",
+   "default": "42"
+  },
+  {
+   "fieldname": "section_factors",
+   "fieldtype": "Section Break",
+   "label": "Factorial Design (optional)",
+   "collapsible": 1,
+   "description": "SOTA Milestone 4 (V2 section 28.7): generalizes architecture_a/architecture_b into real N-factor, K-level designs. Leave empty to keep the original 1-factor/2-level architecture_a-vs-architecture_b behavior unchanged; populate to run the full cartesian product of every distinct factor_name's levels instead."
+  },
+  {
+   "fieldname": "factors",
+   "fieldtype": "Table",
+   "label": "Factors",
+   "options": "EORL Experiment Factor"
+  },
+  {
+   "fieldname": "section_notes",
+   "fieldtype": "Section Break",
+   "label": "Notes",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "model_replication_strategy",
+   "fieldtype": "Small Text",
+   "label": "Model Replication Strategy"
+  },
+  {
+   "fieldname": "stopping_rules",
+   "fieldtype": "Small Text",
+   "label": "Stopping Rules"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Text",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "interpretation_combination",
+   "fieldtype": "Select",
+   "label": "Interpretation Combination Rule",
+   "options": "AND\nOR\nweighted\nseparate",
+   "default": "AND",
+   "description": "How the registered interpretation labels of this experiment's Analysis Plans combine into one verdict (eorl_lab.analysis.interpretation.combine)."
+  }
  ],
  "permissions": [
-  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
-  {"role": "EORL Administrator", "read": 1, "write": 1, "create": 1, "delete": 1},
-  {"role": "EORL Researcher", "read": 1, "write": 1, "create": 1, "delete": 0},
-  {"role": "EORL Viewer", "read": 1}
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "EORL Administrator",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "EORL Researcher",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 0
+  },
+  {
+   "role": "EORL Viewer",
+   "read": 1
+  }
  ]
 }

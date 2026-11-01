@@ -86,3 +86,101 @@ def concentration_in_top_k(episode_paths: List[List[str]], outcomes: List[dict],
 	if total == 0:
 		return 0.0
 	return sum(c for _, c in counts.most_common(k)) / total
+
+
+# ---------------------------------------------------------------------------
+# Adaptive repertoire v2 (submission-day plan section 6). Three sets are
+# kept apart: observed paths (anything that happened), viable paths
+# (paths that met the declared criterion below at least once), and paths
+# activated after a shock (viable paths that were actually used,
+# successfully, once the environment changed). Observed variation is not
+# treated as repertoire.
+# ---------------------------------------------------------------------------
+
+VIABILITY_CRITERION_V2 = "v2"
+DEFAULT_UTILITY_THRESHOLD = 0.9
+
+
+def episode_utility(outcome: dict) -> float:
+	"""Outcome utility in [0, 1] (utility model v1). New runs record
+	`utility` in the episode outcome (eorl_lab.runtime.orchestrator):
+	0 for an episode that did not complete, otherwise 1 minus the share
+	of received units rejected on inspection. For older outcomes without
+	that field, a completed episode with a failed inspection counts 0.5
+	and any other completed episode 1.0."""
+	if outcome.get("utility") is not None:
+		return float(outcome["utility"])
+	if not outcome.get("success"):
+		return 0.0
+	if outcome.get("quality_passed") is False:
+		return 0.5
+	return 1.0
+
+
+def is_viable_v2(outcome: dict, utility_threshold: float = DEFAULT_UTILITY_THRESHOLD) -> bool:
+	"""Criterion v2: terminal success, no hard-policy violation, and
+	utility at or above `utility_threshold`. A hard violation (a denied
+	tool call) ends the episode as a failure in this orchestrator, so the
+	second condition is checked through the recorded failure type as
+	well as the success flag."""
+	if not outcome.get("success"):
+		return False
+	if (outcome.get("failure_type") or "").startswith("authority_denial"):
+		return False
+	return episode_utility(outcome) >= utility_threshold
+
+
+def adaptive_repertoire(episode_paths, outcomes, phases, utility_threshold: float = DEFAULT_UTILITY_THRESHOLD) -> dict:
+	"""Every repertoire measure the plan lists. `episode_paths` should be
+	a consequential-action view (eorl_lab.analysis.paths.process_path
+	with scope="consequential_actions"), so a change of supplier is a
+	change of path and optional reads are not."""
+	paths = [tuple(p) for p in episode_paths]
+	viable_flags = [is_viable_v2(o, utility_threshold) for o in outcomes]
+
+	observed = set(paths)
+	viable_counts = Counter(p for p, v in zip(paths, viable_flags) if v)
+	viable_total = sum(viable_counts.values())
+
+	result = {
+		"viability_criterion": VIABILITY_CRITERION_V2,
+		"utility_threshold": utility_threshold,
+		"observed_path_count": len(observed),
+		"viable_path_count": len(viable_counts),
+		"viable_path_entropy": shannon_entropy(viable_counts),
+		"viable_path_concentration": (max(viable_counts.values()) / viable_total) if viable_total else 0.0,
+	}
+
+	pre_idx = [i for i, ph in enumerate(phases) if ph in ("warmup", "stable")]
+	post_idx = [i for i, ph in enumerate(phases) if ph in ("shock", "recovery")]
+	if not pre_idx or not post_idx:
+		return result
+
+	pre_viable = Counter(paths[i] for i in pre_idx if viable_flags[i])
+	pre_observed = {paths[i] for i in pre_idx}
+	pre_modal = Counter(paths[i] for i in pre_idx).most_common(1)[0][0]
+	post_observed = {paths[i] for i in post_idx}
+	post_viable_episodes = [i for i in post_idx if viable_flags[i]]
+	activated = {paths[i] for i in post_viable_episodes} & set(pre_viable)
+
+	activation_latency = None
+	for offset, i in enumerate(post_idx):
+		if viable_flags[i] and paths[i] in pre_viable and paths[i] != pre_modal:
+			activation_latency = offset
+			break
+
+	n_pre_viable = len(pre_viable)
+	result.update({
+		"pre_shock_repertoire_size": n_pre_viable,
+		"pre_shock_repertoire_entropy": shannon_entropy(pre_viable),
+		"post_shock_reuse_rate": (
+			sum(1 for i in post_viable_episodes if paths[i] in pre_viable) / len(post_viable_episodes)
+		) if post_viable_episodes else 0.0,
+		"post_shock_novel_path_rate": sum(1 for i in post_idx if paths[i] not in pre_observed) / len(post_idx),
+		"path_extinction_rate_v2": (len(set(pre_viable) - post_observed) / n_pre_viable) if n_pre_viable else 0.0,
+		"repertoire_retention": (len(set(pre_viable) & post_observed) / n_pre_viable) if n_pre_viable else 0.0,
+		"repertoire_activation_latency": activation_latency,
+		"adaptive_repertoire_utilization": (len(activated) / n_pre_viable) if n_pre_viable else 0.0,
+		"activated_after_shock_paths": len(activated),
+	})
+	return result

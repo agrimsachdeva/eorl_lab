@@ -5,10 +5,17 @@ from erpnext.stock.doctype.purchase_receipt.purchase_receipt import make_purchas
 from frappe.utils import add_days, nowdate
 
 
-def get_supplier_options(item_code: str, limit: int = 5) -> dict:
-	"""Read/sensing tool (spec section 10). Lists item-specific suppliers
-	when configured, otherwise falls back to any active Supplier so the
-	tool is usable against the current master data."""
+def get_supplier_options(item_code: str, limit: int = 5, _case: dict = None) -> dict:
+	"""Read/sensing tool (spec section 10). The candidate suppliers are
+	exogenous scenario state (submission-day plan section 22): when the
+	case names them, the tool returns those that exist in ERPNext, in the
+	case's order, so the latent parameters the scenario (and any regime
+	shift) assigns to them are the ones that apply. Without a case it
+	lists item-specific suppliers, falling back to any active Supplier."""
+	scenario_candidates = [s for s in ((_case or {}).get("candidate_suppliers") or []) if frappe.db.exists("Supplier", s)]
+	if scenario_candidates:
+		return {"item_code": item_code, "candidate_suppliers": scenario_candidates[: int(limit)]}
+
 	suppliers = frappe.get_all(
 		"Item Supplier",
 		filters={"parent": item_code},
