@@ -96,7 +96,7 @@ see the commit timeline.
 ## How to run things
 
 ```bash
-# start the containers (on agrim, host shell)
+# start the containers (on the lab machine, host shell)
 cd ~/frappe_docker
 docker compose -f .devcontainer/docker-compose.yml up -d
 
@@ -173,6 +173,10 @@ its own MariaDB database and its own database user, which was checked directly
 (the `erpnext.localhost` database user could see only its own database). They
 shared one MariaDB server. One custom app, `erp_research`, ran on all of
 them. Frappe 14 on Python 3.10.12.
+
+*(Since 2026-11-01 this machine is `enterpriseailab` on the tailnet, MagicDNS
+`enterpriseailab.taile74753.ts.net`. Its OS hostname and Linux account are still
+`agrim`. The text below is the record as written and uses the old name.)*
 
 **Goal.** Move this to the researcher's own machine, `agrim`, reachable over
 Tailscale, and keep the Jetstream workflow: edit code on disk, live reload,
@@ -691,7 +695,10 @@ comparison. None of it is committed to git yet (see "Open items today").
   It holds synthetic data only: a fictitious company, two milk suppliers and
   one stock item (MILK-001). It does not contain the participant data on
   `erpnext.localhost`, which stays on port 8001 and is not exposed.
-- Reachable on the tailnet only. A supervisor script outside the repository
+- Reachable on the tailnet only when first built. Since 2026-11-01 it is public
+  through Tailscale Funnel at `https://enterpriseailab.taile74753.ts.net`, which
+  proxies to port 8002 only, and its `host_name` is set to that address (see
+  RUNNING_AND_SHARING.md section 7). A supervisor script outside the repository
   (`~/eorl_live/eorl_live_ctl.sh start|stop|status`) runs both servers.
   Credentials are in `~/eorl_live/credentials.env`, mode 600.
 - A read-only reviewer account holds the EORL Viewer role. It can read every
@@ -1072,7 +1079,7 @@ compared with UTC.
 
 ## What exists now (inventory)
 
-Counted from the repository on agrim on 2026-11-01.
+Counted from the repository on the lab machine on 2026-11-01.
 
 **Size.** 9,460 lines of Python in total: 5,375 in the application packages
 below, 3,876 in tests and 208 in DocType controllers. 1,778 lines of
@@ -1210,7 +1217,7 @@ Both spec documents are versioned in `docs/specs/`.
 
 ## Reference runs
 
-These exist in the site database on agrim only. A fresh install would not have
+These exist in the site database on the lab machine only. A fresh install would not have
 them. The runs below are on `erpnext.localhost`. The hosted demo site has its
 own numbering, listed in "After SOTA 10: hosted demo and language-model
 pilot" (RUN-00017 to RUN-00032 there are the pilot).
@@ -1334,7 +1341,7 @@ rows; `pilot/` untracked (committed with this build); no second routine.
 
 Still open from the lists below: Mann-Whitney, Wilcoxon and Cox models;
 mixed effects beyond success rate; Experiment Studio's "architecture_a is
-required" on Theory Compiler drafts; the public route for reviewers;
+required" on Theory Compiler drafts;
 external workers and Parquet export; `anthropic`, `shared` and `vector`;
 `request_approval` and enforcement of decision and assignment rights;
 graphical studios; per-branch ERP isolation; a second model family; the
@@ -1352,6 +1359,14 @@ Found at the end of the build, not changed:
 - **The live servers still run the code from before the build.** They are
   started with `--noreload`; restart them with `~/eorl_live/eorl_live_ctl.sh
   stop` and `start` so the hosted site serves the new pages and endpoints.
+- **The public site runs Frappe's development server.** `bench serve` starts
+  Werkzeug with its debugger on. Werkzeug 3.1.5 allows the debugger console
+  only for a `.localhost` or `127.0.0.1` Host and only with the PIN, and a
+  console also needs the per-process secret shown on a crash page, so the
+  exposure is small. Starting the port-8002 server with the debugger off
+  would remove it; setting `CI=1` is not a safe way to do that, because it
+  also makes Frappe's guest-callable `can_subscribe_doc` skip its permission
+  check.
 - **The background queue needs a worker** (`bench worker --queue long`); the
   live supervisor starts web servers only.
 
@@ -1418,11 +1433,11 @@ Found at the end of the build, not changed:
   `compare_groups`. The reviewer role can also read the Model Profile's
   `base_url`. The key itself is in site config and is not readable. Neither
   gap is fixed.
-- **No public route for reviewers.** The demo is tailnet-only, so reviewers
-  cannot reach it until a public route is chosen. The Word submissions say a
-  link and reviewer login go in the submission form.
+- **No public route for reviewers.** Resolved later on 2026-11-01: the demo
+  site is public at `https://enterpriseailab.taile74753.ts.net` through Funnel.
+  The Word submissions say a link and reviewer login go in the submission form.
 - **`pilot/` is untracked.** The scripts are in the working tree of the repo
-  on agrim but not committed, and Section 11.4 of the appendix says they are
+  on the lab machine but not committed, and Section 11.4 of the appendix says they are
   in the repository. If the review is double-blind, the package metadata in
   `pyproject.toml` carries the author's name and email.
 - **Do not re-run `pilot_analyze.py --full`.** It stores new Analysis Result

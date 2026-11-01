@@ -381,7 +381,7 @@ driven a single decision.
   to the same `EORL Tool Policy` allow-list as everything else.
 - **Wired to a real, already-hosted model**, not a hypothetical one: a
   Qwen3 model (`barrydeen/Qwen3.8-27B-AWQ-4bit`) served via vLLM on a
-  tailnet host, reachable from agrim's dev container. The API key lives
+  tailnet host, reachable from the lab machine's dev container (`enterpriseailab` on the tailnet since 2026-11-01). The API key lives
   in `site_config.json` only (`qwen_api_key`, via `bench set-config`),
   resolved through `EORL Model Profile.api_key_reference` — never
   stored on the DocType itself, never committed, never logged.

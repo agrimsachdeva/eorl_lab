@@ -1,25 +1,27 @@
 # Running, testing and sharing EORL Lab
 
-How to start the EORL Lab app on agrim, run its tests, look at it from another machine, and (if you decide to) put a live copy on the internet for the *Organization Science* submission.
+How to start the EORL Lab app on the lab machine (tailnet name `enterpriseailab`), run its tests, look at it from another machine, and (if you decide to) put a live copy on the internet for the *Organization Science* submission.
 
 > **Operator document.** It contains this machine's tailnet IP address and hostname. It is deliberately **not** in `docs/` and **not** in the `mkdocs.yml` nav, because the public docs site is built from those. Read it through before you give anyone access to the repository.
 
 Last updated: 2026-11-01.
 
-> **State at the end of 2026-11-01.** A clean demo site, `eorl-demo.localhost`, is running on agrim at `http://100.117.207.117:8002`. It is reachable from your tailnet only. It is **not** on the internet, because the public route is your decision (sections 7 to 9). Section 3.4 describes the site, how it was built and how to log in. The login details are in `~/eorl_live/credentials.env` on agrim.
+> **State at the end of 2026-11-01.** A clean demo site, `eorl-demo.localhost`, is running on the lab machine at `http://100.117.207.117:8002` and is **public** through Tailscale Funnel at **`https://enterpriseailab.taile74753.ts.net`** (section 7). Only the demo site is behind that URL; the working site on 8001 is not. Section 3.4 describes the site, how it was built and how to log in. The login details are in `~/eorl_live/credentials.env` on the lab machine.
+>
+> **Machine name.** The Tailscale node was renamed from `agrim` to `enterpriseailab` on 2026-11-01. The operating-system hostname and the Linux account are still `agrim`, so paths such as `/home/agrim` and the SSH user are unchanged. The old name `agrim.taile74753.ts.net` no longer resolves.
 
 How to read the status labels:
 
 | Label | Meaning |
 |---|---|
-| **Verified** | Run on agrim (or against it over the tailnet) on 2026-11-01 and the result was as described. |
+| **Verified** | Run on the lab machine (or against it over the tailnet) on 2026-11-01 and the result was as described. |
 | **Not tested** | Written from `--help` output, source code or vendor documentation. Nothing was run. Try it once before you rely on it. |
 | **Blocked** | Needs something only you (the tailnet owner) can do. |
 
 ## Contents
 
 1. [Facts you need](#1-facts-you-need)
-2. [Reach agrim](#2-reach-agrim)
+2. [Reach the lab machine](#2-reach-the-lab-machine)
 3. [Start, check and stop](#3-start-check-and-stop)
 4. [Open it in a browser](#4-open-it-in-a-browser)
 5. [Run the tests](#5-run-the-tests)
@@ -37,7 +39,7 @@ How to read the status labels:
 
 | Item | Value |
 |---|---|
-| Machine | `agrim`, Ubuntu, Tailscale IPv4 `100.117.207.117`, tailnet `agrimsachdeva.github`, MagicDNS name `agrim.taile74753.ts.net`, Tailscale 1.104.2 |
+| Machine | Tailscale node `enterpriseailab` (OS hostname `agrim`, Linux account `agrim`), Ubuntu, Tailscale IPv4 `100.117.207.117`, tailnet `agrimsachdeva.github`, MagicDNS name `enterpriseailab.taile74753.ts.net`, Tailscale 1.104.2 |
 | Repo (host path) | `~/frappe_docker/development/frappe-bench/apps/eorl_lab` |
 | Repo (container path) | `/workspace/development/frappe-bench/apps/eorl_lab` |
 | Git | remote `upstream`, branch `main`. Run git on the **host** shell, not in the container. |
@@ -46,19 +48,21 @@ How to read the status labels:
 | Bench | `/workspace/development/frappe-bench` in the container, virtualenv `env`, Python 3.10.12 |
 | Versions | Frappe 14.101.1, ERPNext 14.92.14 |
 | EORL working site | `erpnext.localhost`, served on port 8001. It is your own development site. It also holds the older erp_research study (106 participant users, `admin@admin.com`, session, task-event and chat-message data, 556 purchase orders). **Never expose this site to the internet.** |
-| EORL demo site | `eorl-demo.localhost`, served on port 8002. Built clean for sharing (section 3.4). |
+| EORL demo site | `eorl-demo.localhost`, served on port 8002. Built clean for sharing (section 3.4). Public at `https://enterpriseailab.taile74753.ts.net` through Funnel; its `site_config.json` sets `host_name` to `https://enterpriseailab.taile74753.ts.net:443` so links Frappe generates use the public address (the explicit `:443` stops Frappe appending the dev port 8000). |
 | Other sites on the bench | `agentic.localhost`, `auto.localhost`, `conversational.localhost` (not used by EORL) |
 | Live-instance files on the host | `~/eorl_live/eorl_live_ctl.sh` (supervisor), `~/eorl_live/credentials.env` (mode 600), `~/eorl_live/boot.log`. None of them is in the repo. |
-| Published ports | 8000-8005 and 9000-9005, bound to the **tailnet IP only** (compose lines 55-57). They are not reachable on `localhost` of agrim and not on the LAN. |
+| Published ports | 8000-8005 and 9000-9005, bound to the **tailnet IP only** (compose lines 55-57). They are not reachable on `localhost` of the lab machine and not on the LAN. |
 | Web server | The container command is `sleep infinity`, so a running container does not mean a running site. The supervisor in section 3.4 starts the two single-site servers (cron `@reboot`, not yet tested across a reboot). Without it, nothing is serving. |
 
 Frappe picks the site from the HTTP `Host` header. That is why section 4 has two routes.
 
-## 2. Reach agrim
+## 2. Reach the lab machine
 
 ```bash
-tailscale ssh agrim@agrim
+tailscale ssh agrim@enterpriseailab
 ```
+
+The user is still `agrim`; only the Tailscale host name changed. **Not tested** since the rename.
 
 Tailscale SSH sometimes asks for a browser re-approval and prints a login URL. Only you can open it. Nothing in this document works until that is done.
 
@@ -129,7 +133,7 @@ pkill -f "[b]ench --site erpnext.localhost serve"
 
 Do not start a test run while any other `bench` process is up (see section 5).
 
-On agrim the supervisor in section 3.4 now runs this same command for you, so use the manual form only for a one-off.
+On the lab machine the supervisor in section 3.4 now runs this same command for you, so use the manual form only for a one-off.
 
 ### 3.4 The live demo site and its supervisor
 
@@ -192,7 +196,7 @@ Stop the supervised servers before a test run (section 5), then start them again
 
 ### 4.1 From any machine on your tailnet (recommended)
 
-1. Check the servers are up: `~/eorl_live/eorl_live_ctl.sh status` on agrim (section 3.4).
+1. Check the servers are up: `~/eorl_live/eorl_live_ctl.sh status` on the lab machine (section 3.4).
 2. On the other machine (signed in to the same tailnet) open `http://100.117.207.117:8002/` for the demo site, or `http://100.117.207.117:8001/` for your working site.
 3. Log in. For the demo site use `reviewer@example.org` or `Administrator`, with the passwords in `~/eorl_live/credentials.env`. For the working site use the account you already use.
 4. The EORL workspace is at `/app/eorl-lab` and links to every page.
@@ -222,7 +226,7 @@ Prerequisites:
 
 - `allow_tests` is set in the site config. It is set on `erpnext.localhost`. On `eorl-demo.localhost` it was removed for sharing, so set it first: `bench --site eorl-demo.localhost set-config allow_tests True --parse`, and remove it afterwards (section 6, item 4).
 - The vLLM host and key are in the site config as `qwen_base_url`, `qwen_model` and `qwen_api_key`, and the host is reachable. Some tests call the live model. On the demo site these keys were removed too, so copy them in for the run and remove them afterwards.
-- No other `bench` process is running. A second bench process during the suite caused a MySQL naming-series deadlock in SOTA Milestone 8. On agrim that means `~/eorl_live/eorl_live_ctl.sh stop` first, and `start` afterwards.
+- No other `bench` process is running. A second bench process during the suite caused a MySQL naming-series deadlock in SOTA Milestone 8. On the lab machine that means `~/eorl_live/eorl_live_ctl.sh stop` first, and `start` afterwards.
 - Frappe's runner works against the site's own database. Do not run it while someone is using the site.
 
 ```bash
@@ -307,13 +311,13 @@ Behaviour of the dev server behind a TLS proxy (**Verified** with simulated prox
 - Redirects use a relative `Location` (`/login?redirect-to=...`), so they survive an HTTPS front end.
 - The `sid` session cookie is `HttpOnly; SameSite=Lax` and has no `Secure` flag, because the server sees plain HTTP. It still works over HTTPS.
 - This is Werkzeug's development server, not a production server. It suits a handful of reviewers, not load.
-- The site is up only while agrim is powered and the container is running. The supervisor (section 3.4) restarts a crashed server within five seconds and a cron `@reboot` entry should start it after a reboot, but the reboot path is **Not tested**. Check `status` after any reboot, and avoid rebooting agrim during the review window.
+- The site is up only while the lab machine is powered and the container is running. The supervisor (section 3.4) restarts a crashed server within five seconds and a cron `@reboot` entry should start it after a reboot, but the reboot path is **Not tested**. Check `status` after any reboot, and avoid rebooting the lab machine during the review window.
 
 ## 7. Option A: Tailscale Funnel
 
 A stable HTTPS URL served through Tailscale's relays, with a certificate Tailscale manages.
 
-**State today (Verified):** `tailscale funnel status` says "No serve config". HTTPS certificates are not enabled for the tailnet (no cert domains) and the Funnel node attribute is missing. The URL would be `https://agrim.taile74753.ts.net`. Expose the demo site (port 8002), never the working site.
+**State today (Verified 2026-11-01, after the rename):** Funnel is on. `tailscale funnel status` shows `https://enterpriseailab.taile74753.ts.net` proxying `/` to `http://100.117.207.117:8002`, the demo site, so certificates and the Funnel attribute are enabled and the loopback forwarder (step A3) is not needed. Through the public URL `/api/method/ping` returns pong, `/login` returns 200, and the reviewer login and the new EORL endpoints work. The status also still lists a serve entry for the old name `https://agrim.taile74753.ts.net`; that name no longer resolves, so the entry is inert. Expose the demo site (port 8002), never the working site. Steps A1 to A4 below are the record of how to set this up.
 
 **Step A1. Blocked on you, as tailnet owner.** In the Tailscale admin console:
 
@@ -330,7 +334,7 @@ A stable HTTPS URL served through Tailscale's relays, with a certificate Tailsca
 
 **Step A2.** Check that the demo server is up: `~/eorl_live/eorl_live_ctl.sh status` should show pong on 8002 (section 3.4).
 
-**Step A3.** Give Funnel a service on agrim's own loopback. `tailscale funnel` proxies to a service on the local machine, and Docker published port 8002 only on the tailnet IP. Run the small forwarder in [Appendix A](#appendix-a-loopback-forwarder) on the **host** shell. **Verified** on 2026-11-01 with the script set to port 8001: `curl http://127.0.0.1:8001/api/method/ping` on agrim returned pong and `/login` returned 200 through the forwarder. The script as written below uses 8002; that exact setting has **not been run**, though only the two port numbers differ.
+**Step A3.** Give Funnel a service on the lab machine's own loopback. `tailscale funnel` proxies to a service on the local machine, and Docker published port 8002 only on the tailnet IP. Run the small forwarder in [Appendix A](#appendix-a-loopback-forwarder) on the **host** shell. **Verified** on 2026-11-01 with the script set to port 8001: `curl http://127.0.0.1:8001/api/method/ping` on the lab machine returned pong and `/login` returned 200 through the forwarder. The script as written below uses 8002; that exact setting has **not been run**, though only the two port numbers differ.
 
 Whether `tailscale funnel` would accept `http://100.117.207.117:8002` directly is **Not tested**; the forwarder removes the question. The alternative is adding `"127.0.0.1:8002:8002"` to the compose `ports:` list, which recreates the frappe container, so prefer the forwarder.
 
@@ -341,7 +345,7 @@ tailscale funnel --bg 8002
 tailscale funnel status
 ```
 
-Then open `https://agrim.taile74753.ts.net` from a device that is **not** on your tailnet (a phone on mobile data is enough) and log in once as the reviewer. **Not tested**, because A1 is blocked.
+Then open `https://enterpriseailab.taile74753.ts.net` from a device that is **not** on your tailnet (a phone on mobile data is enough) and log in once as the reviewer. **Not tested**, because A1 is blocked.
 
 **Step A5, to take it down:**
 
@@ -354,15 +358,15 @@ pkill -f "[e]orl_fwd"
 Trade-offs:
 
 - The URL is stable across restarts, which suits a link in a submission form.
-- It contains `agrim`. See section 10.
-- Renaming the machine in the admin console would change the URL, but it would also break `tailscale ssh agrim@agrim` and anything else that uses that name.
+- Since the rename the URL no longer contains `agrim`; it contains the tailnet name `taile74753` only. See section 10.
+- The rename changed the SSH target to `agrim@enterpriseailab` and dropped the old URL.
 - Tailscale's relays carry the traffic, and the tailnet owner controls Funnel. It stops when you run `tailscale funnel reset`.
 
 ## 8. Option B: Cloudflare quick tunnel
 
 No account, no tailnet admin step, and the URL does not contain your name.
 
-**Not tested.** `cloudflared` is not installed on agrim or in the container, and nothing was downloaded.
+**Not tested.** `cloudflared` is not installed on the lab machine or in the container, and nothing was downloaded.
 
 The tunnel starts from inside the container and points at the local server, so it needs no Docker port publishing and no forwarder:
 
@@ -406,13 +410,13 @@ If the review is blind, these surfaces identify you:
 
 | Surface | What it shows |
 |---|---|
-| Funnel URL | `agrim` in the hostname |
+| Funnel URL | `enterpriseailab.taile74753.ts.net`: no personal name since the 2026-11-01 rename |
 | Docs site `https://agrimsachdeva.github.io/eorl_lab/` | Your GitHub username. It is **public even though the repo is private**. |
 | Repo URL | Your GitHub username |
 | Git history | Commit author `agrim <agrim@arizona.edu>` on every commit, visible to anyone with repo access |
 | Cloudflare quick tunnel | Nothing |
 
-The demo site's `EORL Model Profile` named "Qwen3 27B (vLLM)" has a `base_url` that is the vLLM host's tailnet address, and the EORL Viewer role can read that DocType, so the reviewer can see it. **Verified** 2026-11-01: the run records themselves (`provider_snapshots_json`, `agent_snapshots_json` and the other snapshot fields of RUN-00013 and RUN-00014) do not contain an address. The address is private to the tailnet and the API key is not stored there, but it is an internal detail. Either clear the profile's `base_url` before a public review (live runs then stop working until it is put back) or accept it.
+The demo site's `EORL Model Profile` named "Qwen3 27B (vLLM)" has a `base_url` that is the vLLM host's tailnet address. Since the submission-day build `base_url` and `api_key_reference` are at permission level 1, which the EORL Viewer role cannot read, and model events record the profile name rather than the address. Note that the reviewer account on the demo site currently also holds EORL Researcher, which can read level 1. **Verified** 2026-11-01: the run records themselves (`provider_snapshots_json`, `agent_snapshots_json` and the other snapshot fields of RUN-00013 and RUN-00014) do not contain an address. The address is private to the tailnet and the API key is not stored there, but it is an internal detail. Either clear the profile's `base_url` before a public review (live runs then stop working until it is put back) or accept it.
 
 The change log that came with the revised Word files already lists the author block, the docs site and the repo link as items for you to settle. Nothing here has been changed.
 
@@ -420,12 +424,12 @@ The change log that came with the revised Word files already lists the author bl
 
 Two secrets were pasted into the chat during this project. Treat both as compromised.
 
-- **GitHub personal access token.** Revoke it in GitHub → Settings → Developer settings → Personal access tokens, then use a new one or an SSH key stored on agrim only.
-- **vLLM API key.** Rotate it on the vLLM host before any public exposure. The new key belongs in `sites/erpnext.localhost/site_config.json` as `qwen_api_key`, or in an environment variable on agrim. Never in a DocType field, a commit, or a document like this one.
+- **GitHub personal access token.** Revoke it in GitHub → Settings → Developer settings → Personal access tokens, then use a new one or an SSH key stored on the lab machine only.
+- **vLLM API key.** Rotate it on the vLLM host before any public exposure. The new key belongs in `sites/erpnext.localhost/site_config.json` as `qwen_api_key`, or in an environment variable on the lab machine. Never in a DocType field, a commit, or a document like this one.
 
 Neither secret was written to disk or to git config by Claude, and neither appears in this file.
 
-The demo site's generated passwords (Administrator and the reviewer) are in `~/eorl_live/credentials.env` on agrim, mode 600. This file records the path only. Read it on agrim, or pass the reviewer password to the person who needs it through a channel other than this repo.
+The demo site's generated passwords (Administrator and the reviewer) are in `~/eorl_live/credentials.env` on the lab machine, mode 600. This file records the path only. Read it on the lab machine, or pass the reviewer password to the person who needs it through a channel other than this repo.
 
 ## 12. Troubleshooting
 
@@ -445,21 +449,21 @@ The demo site's generated passwords (Administrator and the reviewer) are in `~/e
 
 ## 13. Decisions and open items
 
-1. Is a public route worth having, or is the tailnet-only demo plus Option C enough for the Stage 1 submission? Nothing is on the internet today.
-2. If a public route: Funnel (stable, `agrim` in the URL, needs you to enable certs and the funnel attribute) or Cloudflare (anonymous, URL changes, untested)?
-3. Close the five role gaps in section 6 item 9, with tests. Say so and it can be done.
+1. Resolved 2026-11-01: the demo site is public through Funnel. Switch it off after the review window with `tailscale funnel reset`.
+2. Resolved 2026-11-01: Funnel at `https://enterpriseailab.taile74753.ts.net`, with no personal name in the URL.
+3. Done 2026-11-01: role checks added to every whitelisted read function, with tests. Remove `EORL Researcher` from the reviewer account so the account is read-only.
 4. Rotate the GitHub token and the vLLM key (section 11) before any public request.
 5. Decide what to do about the vLLM address in the model profile (section 10): leave it, or clear it for the review window.
 6. Decide whether to apply a Module Profile to the reviewer account (section 6 item 2). It hides the rest of ERPNext. It is not a security control.
 7. Decide whether the public docs site and the git author identity are acceptable under blind review (section 10).
 8. Run the full 140-test suite once on the demo site with the install fix. The first run passed 134; the two modules that held the other six passed on re-run (15 and 5 tests), but no single full run has been made on the fixed code.
-9. Reboot check. After the next agrim reboot, run `~/eorl_live/eorl_live_ctl.sh status` and read `~/eorl_live/boot.log`.
+9. Reboot check. After the next reboot of the lab machine, run `~/eorl_live/eorl_live_ctl.sh status` and read `~/eorl_live/boot.log`.
 10. Not tested in a browser on the demo site: the Power Planner, Survival Analysis, Robustness Diagnostics, Paired-Branch Inference and Theory Compiler pages, and any browser other than Chrome.
 11. Authorize the claude.ai Gmail, Google Calendar and Scholar Gateway connectors in your claude.ai connector settings if you want them used in future sessions.
 
 ## Appendix A: loopback forwarder
 
-Listens on agrim's `127.0.0.1:8002` and relays to `100.117.207.117:8002` (the demo site), so a tool that wants a local service (Funnel) finds one. Loopback only, so nothing new is reachable from the network. **Verified** 2026-11-01 with ports set to 8001; the 8002 setting is untested.
+Listens on the lab machine's `127.0.0.1:8002` and relays to `100.117.207.117:8002` (the demo site), so a tool that wants a local service (Funnel) finds one. Loopback only, so nothing new is reachable from the network. **Verified** 2026-11-01 with ports set to 8001; the 8002 setting is untested.
 
 Save it on the host (not in the container) as `/tmp/eorl_fwd.py`:
 
@@ -507,4 +511,4 @@ nohup python3 /tmp/eorl_fwd.py > /tmp/eorl_fwd.log 2>&1 &
 pkill -f "[e]orl_fwd"
 ```
 
-If you want it to survive a reboot, it needs a systemd unit, which needs `sudo` (a password on agrim). It is not set up.
+If you want it to survive a reboot, it needs a systemd unit, which needs `sudo` (a password on the lab machine). It is not set up.

@@ -1,6 +1,7 @@
 # Reviewer guide
 
-About five minutes. Log in to the demonstration site with the reviewer account from the
+About five minutes. Log in to the demonstration site,
+**https://enterpriseailab.taile74753.ts.net**, with the reviewer account from the
 submission form and open **`/app/eorl-reviewer`**. That page resolves every step below to
 a real record on the site and opens it in one click. This file is the same walkthrough on
 paper.

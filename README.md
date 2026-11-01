@@ -23,8 +23,8 @@ list, with what is partial and what is planned, is in
 **How to run it.** See [QUICKSTART.md](QUICKSTART.md): install the app on a Frappe 14 /
 ERPNext 14 bench, run the tests, run a scripted episode.
 
-**How to verify the submission.** Log in to the demonstration site with the reviewer
-account given in the submission form and open **`/app/eorl-reviewer`**, a five-minute
+**How to verify the submission.** Log in to the demonstration site at
+<https://enterpriseailab.taile74753.ts.net> with the reviewer account given in the submission form and open **`/app/eorl-reviewer`**, a five-minute
 guided walkthrough of eleven real records. [REVIEWER_GUIDE.md](REVIEWER_GUIDE.md) is the
 same walkthrough on paper, with the evaluation matrix.
 
