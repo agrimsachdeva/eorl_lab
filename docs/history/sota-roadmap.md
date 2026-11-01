@@ -1,7 +1,7 @@
 # EORL SOTA Roadmap
 
-**Status:** SOTA Milestone 9 delivered. Created 2026-10-29, updated 2026-10-30
-(SOTA M9).
+**Status:** SOTA Milestones 1–10 delivered. Created 2026-10-29, updated 2026-10-30
+(SOTA M10).
 
 This tracks progress against `docs/specs/EORL_SOTA_DEVELOPER_BUILD_SPEC_V2_ANALYTICS.md`
 ("V2"), a substantially larger specification than the one `PROGRESS.md`
