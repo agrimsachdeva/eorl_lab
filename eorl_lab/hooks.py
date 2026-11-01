@@ -62,7 +62,7 @@ app_license = "mit"
 # ------------
 
 # before_install = "eorl_lab.install.before_install"
-# after_install = "eorl_lab.install.after_install"
+after_install = "eorl_lab.install.after_install"
 
 # Uninstallation
 # ------------

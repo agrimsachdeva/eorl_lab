@@ -724,7 +724,10 @@ JavaScript for the Desk pages and 1,113 lines of DocType JSON.
 19 standalone DocTypes, 6 child tables, 1 single. Roles `EORL Researcher`,
 `EORL Administrator` and `EORL Viewer` ship as fixtures. The only data
 shipped in code is those roles and the 8 constructs seeded by the patch
-`eorl_lab.patches.v1_seed_initial_constructs`. The `Demo ...` agents,
+`eorl_lab.patches.v1_seed_initial_constructs`. `bench install-app` marks every
+patch as already run without running it, so a fresh site never got the
+constructs until 2026-11-01, when an `after_install` hook (`eorl_lab/install.py`)
+began calling the same function. The `Demo ...` agents,
 architectures, regime shifts and experiments used in this document live in
 the site database. A fresh install would not have them.
 

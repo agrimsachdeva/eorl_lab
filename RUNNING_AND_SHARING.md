@@ -6,6 +6,8 @@ How to start the EORL Lab app on agrim, run its tests, look at it from another m
 
 Last updated: 2026-11-01.
 
+> **State at the end of 2026-11-01.** A clean demo site, `eorl-demo.localhost`, is running on agrim at `http://100.117.207.117:8002`. It is reachable from your tailnet only. It is **not** on the internet, because the public route is your decision (sections 7 to 9). Section 3.4 describes the site, how it was built and how to log in. The login details are in `~/eorl_live/credentials.env` on agrim.
+
 How to read the status labels:
 
 | Label | Meaning |
@@ -43,10 +45,12 @@ How to read the status labels:
 | Containers | `devcontainer-frappe-1`, `devcontainer-mariadb-1`, `devcontainer-redis-cache-1`, `devcontainer-redis-queue-1`. All have `restart: unless-stopped`, so they come back after a reboot. |
 | Bench | `/workspace/development/frappe-bench` in the container, virtualenv `env`, Python 3.10.12 |
 | Versions | Frappe 14.101.1, ERPNext 14.92.14 |
-| EORL site | `erpnext.localhost` |
+| EORL working site | `erpnext.localhost`, served on port 8001. It is your own development site. It also holds the older erp_research study (106 participant users, `admin@admin.com`, session, task-event and chat-message data, 556 purchase orders). **Never expose this site to the internet.** |
+| EORL demo site | `eorl-demo.localhost`, served on port 8002. Built clean for sharing (section 3.4). |
 | Other sites on the bench | `agentic.localhost`, `auto.localhost`, `conversational.localhost` (not used by EORL) |
+| Live-instance files on the host | `~/eorl_live/eorl_live_ctl.sh` (supervisor), `~/eorl_live/credentials.env` (mode 600), `~/eorl_live/boot.log`. None of them is in the repo. |
 | Published ports | 8000-8005 and 9000-9005, bound to the **tailnet IP only** (compose lines 55-57). They are not reachable on `localhost` of agrim and not on the LAN. |
-| Web server | **Not started automatically.** The container command is `sleep infinity`, so a running container does not mean a running site. |
+| Web server | The container command is `sleep infinity`, so a running container does not mean a running site. The supervisor in section 3.4 starts the two single-site servers (cron `@reboot`, not yet tested across a reboot). Without it, nothing is serving. |
 
 Frappe picks the site from the HTTP `Host` header. That is why section 4 has two routes.
 
@@ -125,16 +129,75 @@ pkill -f "[b]ench --site erpnext.localhost serve"
 
 Do not start a test run while any other `bench` process is up (see section 5).
 
+On agrim the supervisor in section 3.4 now runs this same command for you, so use the manual form only for a one-off.
+
+### 3.4 The live demo site and its supervisor
+
+**Verified** on 2026-11-01, except where marked.
+
+**Why a separate site.** `erpnext.localhost` holds the older erp_research study (106 participant users, `admin@admin.com`, session, task-event and chat-message data). A reviewer who can log in to that site is one permission mistake away from participant data. So the instance for sharing is a new, clean site, `eorl-demo.localhost`, with none of that data in it.
+
+**What the site contains.**
+
+| Part | Detail |
+|---|---|
+| Apps | `frappe`, `erpnext`, `eorl_lab`. Not `erp_research`. |
+| ERPNext master data | Company `Hoosier Ice Cream` (abbreviation `HIC`, US dollars, standard chart of accounts), suppliers `Bloomington Dairy` and `Indiana Foods Inc`, item `MILK-001`. The procurement scenario and the tests are written against these names. |
+| Reference data | The 8 initial constructs, seeded by the install hook (see "Install bug" below). |
+| Configuration records | Profile `Scripted Policy`, architectures `Specialist Handoff` (four actors) and `Broad Autonomy` (one actor), regime shift `Demand Surge at Episode 4` (quantity x1.8), experiment `Specialist vs Broad Autonomy`, analysis plan `Run-level actor continuity`. |
+| Runs | `RUN-00001` to `RUN-00010`: the experiment's pilot, 5 paired repetitions of both architectures, 6 episodes each, seeds 100 to 104. `RUN-00011`: one 30-episode specialist run, seed 7. `RUN-00012`: `RUN-00001` branched at episode 2 under Broad Autonomy. `RUN-00013`: a live-model episode that **failed** (see below). `RUN-00014`: a live-model episode that succeeded, seed 43, 4 model requests and 4 tool calls. |
+| Analysis | One comparison, `RUN-00001/3/5/7/9` against `RUN-00002/4/6/8/10`. Mean actor continuity 0.709 against 1.000, Welch p = 3.7e-07, permutation p = 0.0079 (the smallest p a 5 against 5 permutation test can give). This is a positive control for the pipeline, not a finding: one actor has actor continuity 1.0 by construction. |
+| Volume | 14 runs, 94 episodes, about 12,300 events, and real ERPNext documents behind them: 94 purchase orders, 92 receipts, 92 invoices, 92 payment entries. |
+| Users | `Administrator` (a generated strong password) and `reviewer@example.org` (a System User with only the **EORL Viewer** role, no welcome email). Both passwords are in `~/eorl_live/credentials.env`. |
+| Site config | Only the database keys. `allow_tests`, `qwen_api_key`, `qwen_base_url`, `qwen_model` and `ai_mode` were set while seeding and tests ran, then removed. |
+
+`RUN-00013` is kept on purpose. The model spent its whole 600-token default budget on reasoning and returned no tool call (`finish_reason='length'`), and the run recorded exactly that as its `failure_reason`. The profile `Qwen3 27B (vLLM)` now has `max_tokens` 4096, which is what `RUN-00014` used.
+
+**Things a reviewer can see.** The model profile `Qwen3 27B (vLLM)` stores the vLLM host's address (a tailnet address) in its `base_url` field. The reviewer can read that DocType. The run records do not carry the address (checked in the database for RUN-00013 and RUN-00014). It is not a secret and is unreachable from outside your tailnet, but it is visible to the reviewer. Edit the profile if you would rather it were not. The API key is **not** stored anywhere in the site.
+
+**What a reviewer can do (Verified with Playwright and system Chrome, from the Jetstream VM over the tailnet, logged in as the reviewer).**
+
+- An unauthenticated request to `/app/eorl-run` redirects to `/login`.
+- After login, these pages load with no console errors: EORL Lab, Run Monitor, Scientific Cockpit, Process Explorer, Trace Explorer, Compare Runs, Network Explorer, Adaptation View, Reproducibility. The run list shows 14 runs and `RUN-00001` opens.
+- In the Scientific Cockpit, selecting the plan and the two run groups and pressing Compare returned the numbers in the table above, with links to the stored result and its provenance.
+- The Experiment Studio returns 403 for the EORL Viewer role. It is a launch tool, so that is the intended result.
+- By API: `list_runs` returns 200. `launch_demo_episode` and `launch_pilot` return 403. Reading Purchase Orders returns 403. The user list shows only the reviewer's own record.
+- **Not tested:** Power Planner, Survival Analysis, Robustness Diagnostics, Paired-Branch Inference and Theory Compiler pages, and any browser other than Chrome.
+
+**The supervisor.** `~/eorl_live/eorl_live_ctl.sh` runs one single-site server per `site:port` pair in its `SITES` line (today `erpnext.localhost:8001 eorl-demo.localhost:8002`). Each server runs in a loop inside the container, so it comes back five seconds after a crash. A lock per port makes `start` safe to run twice.
+
+```bash
+~/eorl_live/eorl_live_ctl.sh status    # prints pong or DOWN for each site
+~/eorl_live/eorl_live_ctl.sh start
+~/eorl_live/eorl_live_ctl.sh stop
+```
+
+The agrim user's crontab has `@reboot /home/agrim/eorl_live/eorl_live_ctl.sh start >> /home/agrim/eorl_live/boot.log 2>&1`. The script waits for the container, then starts the servers. **Not tested** across an actual reboot; check `status` after the next one. Logs are `logs/serve_8001.log` and `logs/serve_8002.log` in the bench.
+
+Stop the supervised servers before a test run (section 5), then start them again.
+
+**Install bug found and fixed.** `bench install-app` marks every entry in `patches.txt` as already run without running it. So a freshly installed site never received the 8 constructs from `v1_seed_initial_constructs`, and a full test run on the new site gave 140 tests, 1 failure and 5 errors, all from the missing constructs. `eorl_lab/install.py` now calls the same function from an `after_install` hook. Checked on a throwaway fresh site (frappe, erpnext, eorl_lab only): 8 constructs after install. The two test modules holding the six failures then ran 15 and 5 tests, all passing. The other 134 tests passed in the first run. A single full run of all 140 on the fixed code has not been done.
+
+**Rebuilding the site.** The build used temporary helper scripts that were not kept. The steps were:
+
+1. `bench new-site eorl-demo.localhost --admin-password <pw> --mariadb-root-password <root pw> --install-app erpnext`
+2. ERPNext setup wizard through `frappe.desk.page.setup_wizard.setup_wizard.setup_complete(args)` with language English, country United States, timezone America/Phoenix, currency USD, company `Hoosier Ice Cream`, abbreviation `HIC`, chart `Standard`, domain Manufacturing, fiscal year 2026-01-01 to 2026-12-31, full name `EORL Administrator`. Leave email and password out so `Administrator` is updated.
+3. The two suppliers and `MILK-001` (stock item, purchase item, litre, default warehouse `Stores - HIC`, expense account `Cost of Goods Sold - HIC`, cost centre `Main - HIC`).
+4. `bench --site eorl-demo.localhost install-app eorl_lab`
+5. The configuration records and runs in the table above, created through the app's own functions (`run_architecture`, `launch_pilot`, `branch_run`, `compare_groups`).
+
+`bench execute` takes a dotted path whose **first segment must be an installed app**, so a throwaway helper has to live inside an app's Python package (for example `eorl_lab/_tmp.py`, run as `eorl_lab._tmp.run`) and be deleted afterwards.
+
 ## 4. Open it in a browser
 
 ### 4.1 From any machine on your tailnet (recommended)
 
-1. Run section 3.3 on agrim.
-2. On the other machine (signed in to the same tailnet) open `http://100.117.207.117:8001/`.
-3. Log in as `Administrator` with the password you set, or as a reviewer account (section 6, item 2).
+1. Check the servers are up: `~/eorl_live/eorl_live_ctl.sh status` on agrim (section 3.4).
+2. On the other machine (signed in to the same tailnet) open `http://100.117.207.117:8002/` for the demo site, or `http://100.117.207.117:8001/` for your working site.
+3. Log in. For the demo site use `reviewer@example.org` or `Administrator`, with the passwords in `~/eorl_live/credentials.env`. For the working site use the account you already use.
 4. The EORL workspace is at `/app/eorl-lab` and links to every page.
 
-**Verified** with `curl` from the Jetstream VM: ping, the login page and the unauthenticated redirect (section 3.3). A full interactive browser login through port 8001 has not been done yet, so do one before you depend on it.
+**Verified** on the demo site (port 8002): a full browser login as the reviewer, page loads and a Cockpit comparison (section 3.4). Port 8001 was checked with `curl` only (section 3.3).
 
 ### 4.2 Full stack on port 8000, with a hosts-file entry
 
@@ -157,17 +220,17 @@ Opening `http://100.117.207.117:8000` by raw IP is **Not tested**. It depends on
 
 Prerequisites:
 
-- `allow_tests` is set in the site config (it is today). Section 6 item 4 removes it for public exposure, so put it back first.
-- The vLLM host named in the site config (`qwen_base_url`) is reachable. One test calls the live model.
-- No other `bench` process is running. A second bench process during the suite caused a MySQL naming-series deadlock in SOTA Milestone 8.
-- Frappe's runner works against the `erpnext.localhost` database itself. Do not run it while someone is using the site.
+- `allow_tests` is set in the site config. It is set on `erpnext.localhost`. On `eorl-demo.localhost` it was removed for sharing, so set it first: `bench --site eorl-demo.localhost set-config allow_tests True --parse`, and remove it afterwards (section 6, item 4).
+- The vLLM host and key are in the site config as `qwen_base_url`, `qwen_model` and `qwen_api_key`, and the host is reachable. Some tests call the live model. On the demo site these keys were removed too, so copy them in for the run and remove them afterwards.
+- No other `bench` process is running. A second bench process during the suite caused a MySQL naming-series deadlock in SOTA Milestone 8. On agrim that means `~/eorl_live/eorl_live_ctl.sh stop` first, and `start` afterwards.
+- Frappe's runner works against the site's own database. Do not run it while someone is using the site.
 
 ```bash
 # inside the container, in the bench directory, venv active
 bench --site erpnext.localhost run-tests --app eorl_lab
 ```
 
-Expect about 5 minutes and 140 tests (the count at SOTA Milestone 10).
+Expect about 8 minutes and 140 tests (the count at SOTA Milestone 10). The run on the fresh demo site took 492 seconds.
 
 Detached form, for when you are connected over SSH and do not want a dropped connection to kill it:
 
@@ -181,7 +244,7 @@ docker exec devcontainer-frappe-1 tail -5 /tmp/eorl_tests.log
 
 Done when the log ends with `DONE_EXIT_0` and the unittest summary reports 140 tests and `OK`.
 
-One module only (path form follows the test tree; **Not tested** today):
+One module only (**Verified** on the demo site on 2026-11-01 with the construct-registry and theory-compiler modules):
 
 ```bash
 bench --site erpnext.localhost run-tests --module eorl_lab.eorl_lab.doctype.eorl_run.test_eorl_run
@@ -196,33 +259,35 @@ Docs build (CI does this on every push to `main`): from the repo root run `pytho
 
 ## 6. Before anything goes on the internet
 
-Everything here applies to Option A and Option B. None of it has been applied except where the status says so.
+Everything here applies to Option A and Option B. The status column is for the **demo site** (`eorl-demo.localhost`, port 8002), which is the only site that should ever be exposed.
 
 | # | What | How | Status |
 |---|---|---|---|
-| 1 | Strong, unique `Administrator` password | `read -rs PW; bench --site erpnext.localhost set-admin-password "$PW"; unset PW` (keeps the password out of shell history) | Not done. Syntax per Frappe 14, **Not tested**. |
-| 2 | A reviewer account with only the **EORL Viewer** role | Desk → User → Add User. Give it only EORL Viewer. In a Module Profile, block the non-EORL modules so the reviewer does not see the rest of ERPNext (cosmetic, not a security control). EORL Viewer has read-only permission on the EORL DocTypes. | Not done |
-| 3 | Website signup disabled | Website Settings → Disable Signup | **Verified**: already set (`disable_signup` = 1 on 2026-11-01) |
-| 4 | Remove `allow_tests` from the site config | See below | Not done. The edit was **Verified** on a copy. |
-| 5 | Rotate the vLLM API key and the GitHub token | Section 11 | Not done |
-| 6 | Serve one site only | Use section 3.3 (port 8001). Never expose `bench start` on 8000, where the other three sites answer to their own `Host` names. | Procedure verified |
-| 7 | Expose a single port, never 8000-8005 or 9000-9005 | Funnel and the tunnel each publish one local port. Leave the compose `ports:` lines alone. | By design |
-| 8 | Check what is in the site | `erpnext.localhost` is an ERPNext site. Look at what other records it holds before reviewers can reach it. | Not done |
+| 1 | Strong, unique `Administrator` password | Generated and set; stored in `~/eorl_live/credentials.env`. To change it: `read -rs PW; bench --site eorl-demo.localhost set-admin-password "$PW"; unset PW` | **Done**, 2026-11-01 |
+| 2 | A reviewer account with only the **EORL Viewer** role | `reviewer@example.org`, System User, only EORL Viewer, no welcome email. EORL Viewer has read-only permission on the EORL DocTypes. A Module Profile that blocks the non-EORL modules would hide the rest of ERPNext from the reviewer (cosmetic, not a security control). | **Done**. The role was checked in the browser (section 3.4). Module Profile not applied. |
+| 3 | Website signup disabled | Website Settings → Disable Signup | **Verified** on the demo site: `disable_signup` = 1, a guest `sign_up` call returns "Sign Up is disabled", and anonymous `list_runs` and `/api/resource/EORL Run` return 403. |
+| 4 | Remove `allow_tests` from the site config | See below | **Done** on the demo site. |
+| 5 | Rotate the vLLM API key and the GitHub token | Section 11. The vLLM key is no longer in the demo site's config, but it was pasted into a chat. | **Not done. Yours to do** |
+| 6 | Serve one site only | The supervisor (section 3.4) runs single-site servers. Never expose `bench start` on 8000, where the other three sites answer to their own `Host` names. | By design |
+| 7 | Expose a single port, never 8000-8005 or 9000-9005 | Funnel and the tunnel each publish one local port. Leave the compose `ports:` lines alone. Expose 8002 only, never 8001. | By design |
+| 8 | Keep participant data out of the exposed site | `erpnext.localhost` holds the erp_research study data. The demo site was created clean, from nothing. | **Done** (section 3.4) |
+| 9 | Close the five role gaps below | `frappe.only_for([...])` plus tests | **Not done.** Needs your go-ahead. |
 
-Item 4. Remove the key, then restore it before the next test run:
+Item 4. How to remove the key (done on the demo site), and how to put it back for a test run:
 
 ```bash
 # inside the container, in the bench directory
 python3 - <<'PY'
 import json
-p = "sites/erpnext.localhost/site_config.json"
+p = "sites/eorl-demo.localhost/site_config.json"
 c = json.load(open(p))
-c.pop("allow_tests", None)
+for k in ("allow_tests", "qwen_api_key", "qwen_base_url", "qwen_model"):
+    c.pop(k, None)
 json.dump(c, open(p, "w"), indent=1)
 PY
 
 # to run tests again
-bench --site erpnext.localhost set-config allow_tests True --parse
+bench --site eorl-demo.localhost set-config allow_tests True --parse
 ```
 
 Item 9, the role gaps. These five whitelisted functions do not call `frappe.only_for(...)`. They use `frappe.get_all`, which ignores DocType permissions, so **any logged-in user** can call them through `/api/method/...`:
@@ -242,13 +307,13 @@ Behaviour of the dev server behind a TLS proxy (**Verified** with simulated prox
 - Redirects use a relative `Location` (`/login?redirect-to=...`), so they survive an HTTPS front end.
 - The `sid` session cookie is `HttpOnly; SameSite=Lax` and has no `Secure` flag, because the server sees plain HTTP. It still works over HTTPS.
 - This is Werkzeug's development server, not a production server. It suits a handful of reviewers, not load.
-- The site is up only while agrim is powered, the container is running and you have started the server. Nothing restarts it. Do not reboot agrim during the review window.
+- The site is up only while agrim is powered and the container is running. The supervisor (section 3.4) restarts a crashed server within five seconds and a cron `@reboot` entry should start it after a reboot, but the reboot path is **Not tested**. Check `status` after any reboot, and avoid rebooting agrim during the review window.
 
 ## 7. Option A: Tailscale Funnel
 
 A stable HTTPS URL served through Tailscale's relays, with a certificate Tailscale manages.
 
-**State today (Verified):** `tailscale funnel status` says "No serve config". HTTPS certificates are not enabled for the tailnet (no cert domains) and the Funnel node attribute is missing. The URL would be `https://agrim.taile74753.ts.net`.
+**State today (Verified):** `tailscale funnel status` says "No serve config". HTTPS certificates are not enabled for the tailnet (no cert domains) and the Funnel node attribute is missing. The URL would be `https://agrim.taile74753.ts.net`. Expose the demo site (port 8002), never the working site.
 
 **Step A1. Blocked on you, as tailnet owner.** In the Tailscale admin console:
 
@@ -261,18 +326,18 @@ A stable HTTPS URL served through Tailscale's relays, with a certificate Tailsca
    ]
    ```
 
-   Running `tailscale funnel 8001` once may print a link that does both steps. **Not tested.**
+   Running `tailscale funnel 8002` once may print a link that does both steps. **Not tested.**
 
-**Step A2.** Start the single-site server (section 3.3).
+**Step A2.** Check that the demo server is up: `~/eorl_live/eorl_live_ctl.sh status` should show pong on 8002 (section 3.4).
 
-**Step A3.** Give Funnel a service on agrim's own loopback. `tailscale funnel` proxies to a service on the local machine, and Docker published port 8001 only on the tailnet IP. Run the small forwarder in [Appendix A](#appendix-a-loopback-forwarder) on the **host** shell. **Verified** on 2026-11-01: with the server up, `curl http://127.0.0.1:8001/api/method/ping` on agrim returned pong and `/login` returned 200 through the forwarder.
+**Step A3.** Give Funnel a service on agrim's own loopback. `tailscale funnel` proxies to a service on the local machine, and Docker published port 8002 only on the tailnet IP. Run the small forwarder in [Appendix A](#appendix-a-loopback-forwarder) on the **host** shell. **Verified** on 2026-11-01 with the script set to port 8001: `curl http://127.0.0.1:8001/api/method/ping` on agrim returned pong and `/login` returned 200 through the forwarder. The script as written below uses 8002; that exact setting has **not been run**, though only the two port numbers differ.
 
-Whether `tailscale funnel` would accept `http://100.117.207.117:8001` directly is **Not tested**; the forwarder removes the question. The alternative is adding `"127.0.0.1:8001:8001"` to the compose `ports:` list, which recreates the frappe container, so prefer the forwarder.
+Whether `tailscale funnel` would accept `http://100.117.207.117:8002` directly is **Not tested**; the forwarder removes the question. The alternative is adding `"127.0.0.1:8002:8002"` to the compose `ports:` list, which recreates the frappe container, so prefer the forwarder.
 
 **Step A4.** On the host shell:
 
 ```bash
-tailscale funnel --bg 8001
+tailscale funnel --bg 8002
 tailscale funnel status
 ```
 
@@ -283,7 +348,7 @@ Then open `https://agrim.taile74753.ts.net` from a device that is **not** on you
 ```bash
 tailscale funnel reset
 pkill -f "[e]orl_fwd"
-# and stop the server inside the container (section 3.3)
+# the demo server keeps running for tailnet use; stop it with the supervisor (section 3.4) if you want it down
 ```
 
 Trade-offs:
@@ -307,8 +372,8 @@ mkdir -p ~/bin
 curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o ~/bin/cloudflared
 chmod +x ~/bin/cloudflared
 
-# section 3.3 must already be running on port 8001
-~/bin/cloudflared tunnel --url http://localhost:8001
+# the demo server must already be running on port 8002 (section 3.4)
+~/bin/cloudflared tunnel --url http://localhost:8002
 ```
 
 It prints a URL of the form `https://<random-words>.trycloudflare.com`. Open it from a device off your tailnet and log in once as the reviewer.
@@ -347,6 +412,8 @@ If the review is blind, these surfaces identify you:
 | Git history | Commit author `agrim <agrim@arizona.edu>` on every commit, visible to anyone with repo access |
 | Cloudflare quick tunnel | Nothing |
 
+The demo site's `EORL Model Profile` named "Qwen3 27B (vLLM)" has a `base_url` that is the vLLM host's tailnet address, and the EORL Viewer role can read that DocType, so the reviewer can see it. **Verified** 2026-11-01: the run records themselves (`provider_snapshots_json`, `agent_snapshots_json` and the other snapshot fields of RUN-00013 and RUN-00014) do not contain an address. The address is private to the tailnet and the API key is not stored there, but it is an internal detail. Either clear the profile's `base_url` before a public review (live runs then stop working until it is put back) or accept it.
+
 The change log that came with the revised Word files already lists the author block, the docs site and the repo link as items for you to settle. Nothing here has been changed.
 
 ## 11. Credentials
@@ -358,41 +425,49 @@ Two secrets were pasted into the chat during this project. Treat both as comprom
 
 Neither secret was written to disk or to git config by Claude, and neither appears in this file.
 
+The demo site's generated passwords (Administrator and the reviewer) are in `~/eorl_live/credentials.env` on agrim, mode 600. This file records the path only. Read it on agrim, or pass the reviewer password to the person who needs it through a channel other than this repo.
+
 ## 12. Troubleshooting
 
 | Symptom | Likely cause and fix |
 |---|---|
 | `tailscale ssh` prints a login URL | Re-approval needed. Open the link in a browser. |
-| Connection refused on 8000 or 8001 | The container is up but no web server is running. Start one (section 3). |
+| Connection refused on 8000, 8001 or 8002 | The container is up but no web server is running. `~/eorl_live/eorl_live_ctl.sh status`, then `start` (section 3.4). |
 | Port already in use | An old bench process. `ps aux | grep "[b]ench"` inside the container, then stop it. |
 | Page says the site does not exist on port 8000 | The `Host` header is not `erpnext.localhost`. Use section 4.1. |
 | Browser ignores the hosts-file entry | See the note in section 4.2. Use section 4.1. |
 | Test suite hangs or reports a lock wait | Another bench process was running. Stop it and rerun. |
 | Live-model test fails with `finish_reason="length"` | Rerun that test; it passes on retry. |
-| After a reboot nothing loads | Containers restart on their own, the web server does not. Start it again. Check `tailscale status` too. |
+| A live episode fails with `finish_reason='length'` | The model profile has no `max_tokens`, so the provider falls back to 600 and Qwen spends it on reasoning. Set `max_tokens` to 4096 on the profile. RUN-00013 on the demo site is the kept record of this failure. |
+| A new site has no constructs (tests error on a missing EORL Construct) | `bench install-app` marks every patch as already run. Before 2026-11-01 a fresh site never got the seed. The `after_install` hook in `eorl_lab/install.py` now seeds them; on an older site run `eorl_lab.patches.v1_seed_initial_constructs.execute`. |
+| After a reboot nothing loads | Containers restart on their own. The cron `@reboot` entry should start the servers; if it did not, run `~/eorl_live/eorl_live_ctl.sh start` and read `~/eorl_live/boot.log`. Check `tailscale status` too. |
 | `tailscale funnel` says Funnel is not enabled | Section 7, step A1. |
 
 ## 13. Decisions and open items
 
-1. Is a live instance worth having at all, or is Option C enough for the Stage 1 submission?
-2. If yes: Funnel (stable, but `agrim` in the URL, and needs you to enable it in the admin console) or Cloudflare (anonymous, URL changes)?
+1. Is a public route worth having, or is the tailnet-only demo plus Option C enough for the Stage 1 submission? Nothing is on the internet today.
+2. If a public route: Funnel (stable, `agrim` in the URL, needs you to enable certs and the funnel attribute) or Cloudflare (anonymous, URL changes, untested)?
 3. Close the five role gaps in section 6 item 9, with tests. Say so and it can be done.
-4. Apply section 6 items 1, 2, 4 and 5 before the first public request.
-5. Rotate the GitHub token and the vLLM key (section 11).
-6. Decide whether the public docs site and the git author identity are acceptable under blind review (section 10).
-7. Authorize the claude.ai Gmail, Google Calendar and Scholar Gateway connectors in your claude.ai connector settings if you want them used in future sessions.
+4. Rotate the GitHub token and the vLLM key (section 11) before any public request.
+5. Decide what to do about the vLLM address in the model profile (section 10): leave it, or clear it for the review window.
+6. Decide whether to apply a Module Profile to the reviewer account (section 6 item 2). It hides the rest of ERPNext. It is not a security control.
+7. Decide whether the public docs site and the git author identity are acceptable under blind review (section 10).
+8. Run the full 140-test suite once on the demo site with the install fix. The first run passed 134; the two modules that held the other six passed on re-run (15 and 5 tests), but no single full run has been made on the fixed code.
+9. Reboot check. After the next agrim reboot, run `~/eorl_live/eorl_live_ctl.sh status` and read `~/eorl_live/boot.log`.
+10. Not tested in a browser on the demo site: the Power Planner, Survival Analysis, Robustness Diagnostics, Paired-Branch Inference and Theory Compiler pages, and any browser other than Chrome.
+11. Authorize the claude.ai Gmail, Google Calendar and Scholar Gateway connectors in your claude.ai connector settings if you want them used in future sessions.
 
 ## Appendix A: loopback forwarder
 
-Listens on agrim's `127.0.0.1:8001` and relays to `100.117.207.117:8001`, so a tool that wants a local service (Funnel) finds one. Loopback only, so nothing new is reachable from the network. **Verified** 2026-11-01.
+Listens on agrim's `127.0.0.1:8002` and relays to `100.117.207.117:8002` (the demo site), so a tool that wants a local service (Funnel) finds one. Loopback only, so nothing new is reachable from the network. **Verified** 2026-11-01 with ports set to 8001; the 8002 setting is untested.
 
 Save it on the host (not in the container) as `/tmp/eorl_fwd.py`:
 
 ```python
 import asyncio
 
-LISTEN_HOST, LISTEN_PORT = "127.0.0.1", 8001
-TARGET_HOST, TARGET_PORT = "100.117.207.117", 8001
+LISTEN_HOST, LISTEN_PORT = "127.0.0.1", 8002
+TARGET_HOST, TARGET_PORT = "100.117.207.117", 8002
 
 
 async def pipe(reader, writer):
